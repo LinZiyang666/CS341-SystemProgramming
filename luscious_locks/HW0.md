@@ -134,18 +134,19 @@ int main() {
 3. Take your program from "Hello, World!" modify it write to a file called `hello_world.txt`.
    - Make sure to to use correct flags and a correct mode for `open()` (`man 2 open` is your friend).
 
-   ```
-   #include <stdio.h>
-   #include <string.h>
-   #include <unistd.h>
-   #include <fcntl.h>
+```
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 
-   int main() {
-     char* str = "Hi! My name is Vlad Petru Nitu";
-     int fd = open("hello_world.txt", O_CREAT | O_RDWR | O_TRUNC, S_IRWXU);
-     write(fd, str, strlen(str));
-   }
+int main() {
+  char* str = "Hi! My name is Vlad Petru Nitu";
+  int fd = open("hello_world.txt", O_CREAT | O_RDWR | O_TRUNC, S_IRUSR | S_IWUSR);
+  write(fd, str, strlen(str));
+  close(fd);
+}
 
    ```
 ### Not everything is a system call
@@ -179,9 +180,24 @@ Sizing up C types and their limits, `int` and `char` arrays, and incrementing po
 
 ### Not all bytes are 8 bits?
 1. How many bits are there in a byte?
-2. How many bytes are there in a `char`?
+In general: 1 Byte = 8 bits, but as the name of this chapter says: the number of bits in a byte can vary from system to system. Thus, 1 byte is AT LEAST 8 bits.
+2. How many bytes are there in a `char`? 1 char = 1 byte
 3. How many bytes the following are on your machine?
    - `int`, `double`, `float`, `long`, and `long long`
+   - 4 bytes, 8 bytes, 4 bytes, 8 bytes, 8 bytes
+   - Proof:
+```
+   #include <stdio.h>
+
+int main() {
+  printf("%ld\n", sizeof(int));
+  printf("%ld\n", sizeof(double));
+  printf("%ld\n", sizeof(float));
+  printf("%ld\n", sizeof(long));
+  printf("%ld\n", sizeof(long long));
+}
+
+```
 ### Follow the int pointer
 4. On a machine with 8 byte integers:
 ```C
@@ -190,9 +206,11 @@ int main(){
 } 
 ```
 If the address of data is `0x7fbd9d40`, then what is the address of `data+2`?
+- 0x7fbd9d50
 
 5. What is `data[3]` equivalent to in C?
    - Hint: what does C convert `data[3]` to before dereferencing the address?
+   - *(data + 3)
 
 ### `sizeof` character arrays, incrementing pointers
   
@@ -203,10 +221,16 @@ Remember, the type of a string constant `"abc"` is an array.
 char *ptr = "hello";
 *ptr = 'J';
 ```
+Because `char *ptr` points to the TEXT segment, where the string literal "hello" is stored. This memory is a READ_ONLY memory, and we try to write in that memory by `*ptr = 'J'`, this is why we get a segfault.
+
 7. What does `sizeof("Hello\0World")` return?
+- 12
 8. What does `strlen("Hello\0World")` return?
+- 11
 9. Give an example of X such that `sizeof(X)` is 3.
+- `char *X = "ab";` 
 10. Give an example of Y such that `sizeof(Y)` might be 4 or 8 depending on the machine.
+- `Y = int*`, as the sizeof returns the size of a pointer in our system. This may be 4 bytes or 8 bytes, depending on the system. Note that sizeof(int*) = sizeof(char*) = sizeof(void*) = ... (etc) on a given system. Thus, the type that the pointer points to does not matter, as the pointer is a MEMORY ADDRESS.
 
 ## Chapter 3
 
