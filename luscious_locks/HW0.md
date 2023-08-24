@@ -84,6 +84,8 @@ HW0 questions are below. Copy your answers into a text document (which the cours
 ## Chapter 1
 
 
+
+
 In which our intrepid hero battles standard out, standard error, file descriptors and writing to files.
 
 ### Hello, World! (system call style)
@@ -100,6 +102,7 @@ int main() {
 }
 ```
 ### Hello, Standard Error Stream!
+
 2. Write a function to print out a triangle of height `n` to standard error.
    - Your function should have the signature `void write_triangle(int n)` and should use `write()`.
    - The triangle should look like this, for n = 3:
@@ -108,13 +111,67 @@ int main() {
    **
    ***
    ```
+
+   ```
+   #include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+
+void write_triangle(int n) {
+  for (int i = 1; i <= n; ++i) {
+    write(2, "***", i);
+    write(2, "\n", 1);
+  }
+  return;
+}
+
+int main() {
+  write_triangle(3);
+}
+
+   ```
 ### Writing to files
 3. Take your program from "Hello, World!" modify it write to a file called `hello_world.txt`.
    - Make sure to to use correct flags and a correct mode for `open()` (`man 2 open` is your friend).
+
+   ```
+   #include <stdio.h>
+   #include <string.h>
+   #include <unistd.h>
+   #include <fcntl.h>
+
+
+   int main() {
+     char* str = "Hi! My name is Vlad Petru Nitu";
+     int fd = open("hello_world.txt", O_CREAT | O_RDWR | O_TRUNC, S_IRWXU);
+     write(fd, str, strlen(str));
+   }
+
+   ```
 ### Not everything is a system call
 4. Take your program from "Writing to files" and replace `write()` with `printf()`.
    - Make sure to print to the file instead of standard out!
+   
+```
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+
+
+int main() {
+  const char* str = "Hi! My name is Vlad Petru Nitu";
+  FILE *file = fopen("hello_world.txt", "w");
+  fprintf(file, "%s\n", str);
+}
+```
+
 5. What are some differences between `write()` and `printf()`?
+- When using `write()` we do not have to use a `\n` after the string in order to flush the buffer, while `printf()` has to. As `write()` is a system call, it does not have a buffer to flush. On contrary, `printf()` is a library call (which internally uses  `write()`). 
+- Write takes an `int fd` as a file descriptor for the file you want to write to, whereas printf takes a `FILE *file` object. 
+- In order to print to a file, we need to use `fprintf`, as `printf` prints to `stdout` by-default.
+
+
 
 ## Chapter 2
 
