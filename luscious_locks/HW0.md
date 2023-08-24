@@ -226,7 +226,7 @@ Because `char *ptr` points to the TEXT segment, where the string literal "hello"
 7. What does `sizeof("Hello\0World")` return?
 - 12
 8. What does `strlen("Hello\0World")` return?
-- 11
+- 5, as it counts the number of characters until finding `\0` = the null character.
 9. Give an example of X such that `sizeof(X)` is 3.
 - `char *X = "ab";` 
 10. Give an example of Y such that `sizeof(Y)` might be 4 or 8 depending on the machine.
@@ -238,9 +238,16 @@ Program arguments, environment variables, and working with character arrays (str
 
 ### Program arguments, `argc`, `argv`
 1. What are two ways to find the length of `argv`?
+- argc - 1
+- sizeof(argv) / sizeof(argv[0]))
+
 2. What does `argv[0]` represent?
+-  The name of the executable that we run. 
+
 ### Environment Variables
 3. Where are the pointers to environment variables stored (on the stack, the heap, somewhere else)?
+- Somewhere else, directly above the stack. See the memory layout that was discussed in the first lecture (i.e: draw of professor, where "Program Arguments" is). 
+-
 ### String searching (strings are just char arrays)
 4. On a machine where pointers are 8 bytes, and with the following code:
 ```C
@@ -248,10 +255,13 @@ char *ptr = "Hello";
 char array[] = "Hello";
 ```
 What are the values of `sizeof(ptr)` and `sizeof(array)`? Why?
+- sizeof(ptr) = sizeof(char*) = 8 bytes, as the pointers on the machine in the problem are 8 bytes. 
+- sizeof(array) = sizeof(char) * (Number of chars in array) = 1 * (5 + 1) = 6. Remember that char array[] will have a null-character appended.
 
 ### Lifetime of automatic variables
 
 5. What data structure manages the lifetime of automatic variables?
+- The stack. Automatic variable are allocated on the stack, for the lifetime of the function, and then deallocated, when the scope of the function ends.
 
 ## Chapter 4
 
@@ -259,26 +269,98 @@ Heap and stack memory, and working with structs
 
 ### Memory allocation using `malloc`, the heap, and time
 1. If I want to use data after the lifetime of the function it was created in ends, where should I put it? How do I put it there?
+- I should put it on the heap. I put it there by allocating memory (i.e: using `malloc(X)`, which asks the kernel for X bytes of memory. 
+- An alternative would be to mark the variable as `static`, as this would make the variable persist in memory for the lifetime of the program. 
+
 2. What are the differences between heap and stack memory?
+- The stack is faster, as we only push and pop variables on it, and we can navigate it using the base pointer (BP). The heap is slower, as it allocates memory and this is a tedious process. Both are stored in RAM. Stack does static memory allocation, while the heap allocates memory dynamically. 
 3. Are there other kinds of memory in a process?
-4. Fill in the blank: "In a good C program, for every malloc, there is a ___".
+- Yes, see C memory layout: TEXT segmemnt, DATA (Initialized variables), .bss (Uninitialized variables).
+4. Fill in the blank: "In a good C program, for every malloc, there is a free".
 ### Heap allocation gotchas
 5. What is one reason `malloc` can fail?
+- If there is no memory left for the heap to allocate. For example, if there is no contiguous block of memory of the size the malloc asks for, it can fail.
 6. What are some differences between `time()` and `ctime()`?
+- `time()` -> calculates the current calendar time and stores it in an `time_t` data type
+- `ctime()` -> transforms a `time_t*` into a string, making the current calendar time human-readable.
 7. What is wrong with this code snippet?
 ```C
 free(ptr);
 free(ptr);
 ```
+- Freeing the same pointer two times will result in undefined behavior, becuase the memory was released after the first `free()` call. After that, we may releaes the memory that some other process may have aquired in the meantime.
+
 8. What is wrong with this code snippet?
 ```C
 free(ptr);
 printf("%s\n", ptr);
 ```
+- We are trying to access a dangling pointer (it became dangling after `free(ptr)`, as we have released the memory. This will result in undefined behavior. 
+
 9. How can one avoid the previous two mistakes? 
+- By using memory error detector tools, such as "Memcheck" from Valgrind.
+
 ### `struct`, `typedef`s, and a linked list
 10. Create a `struct` that represents a `Person`. Then make a `typedef`, so that `struct Person` can be replaced with a single word. A person should contain the following information: their name (a string), their age (an integer), and a list of their friends (stored as a pointer to an array of pointers to `Person`s).
+
+```
+struct Person {
+  char *name;
+  int age;
+  struct Person *friends[50];
+};
+
+typedef struct Person person_t; 
+```
 11. Now, make two persons on the heap, "Agent Smith" and "Sonny Moore", who are 128 and 256 years old respectively and are friends with each other.
+
+```
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+struct Person {
+  char *name;
+  int age;
+  struct Person *friends[50];
+};
+
+typedef struct Person person_t;
+
+void print_person(person_t *person) {
+  printf("%s\n", person->name);
+  printf("%d\n", person->age);
+
+  printf("%s ", person->friends[0]->name);
+  printf("%d\n", person->friends[0]->age);
+}
+int main() {
+  person_t *person1 = (person_t*) malloc(sizeof(person_t));
+  person1->name = "Agent Smith";
+  person1->age = 128;
+
+  person_t *person2 = (person_t*) malloc(sizeof(person_t));
+  person2->name = "Sonny Moore";
+  person2->age = 256;
+
+
+
+  person1->friends[0] = person2;
+  person2->friends[0] = person1;
+
+  printf("Person 1\n");
+  print_person(person1);
+  printf("Person 2\n");
+  print_person(person2);
+
+  //Clear
+  memset(person1->friends, 0, sizeof(person1->friends));
+  memset(person2->friends, 0, sizeof(person2->friends));
+  free(person1);
+  free(person2);
+}
+```
+
 ### Duplicating strings, memory allocation and deallocation of structures
 Create functions to create and destroy a Person (Person's and their names should live on the heap).
 12. `create()` should take a name and age. The name should be copied onto the heap. Use malloc to reserve sufficient memory for everyone having up to ten friends. Be sure initialize all fields (why?).
@@ -315,4 +397,5 @@ These are general tips for compiling and developing using a compiler and git. So
 - Find, in your opinion, the best and worst C code on the web and post the link to Ed.
 - Write a short C program with a deliberate subtle C bug and post it on Ed to see if others can spot your bug.
 - Do you have any cool/disastrous system programming bugs you've heard about? Feel free to share with your peers and the course staff on Ed.
+
 
