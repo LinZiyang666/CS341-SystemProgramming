@@ -83,15 +83,27 @@ HW0 questions are below. Copy your answers into a text document (which the cours
 
 ## Chapter 1
 
+
 In which our intrepid hero battles standard out, standard error, file descriptors and writing to files.
 
 ### Hello, World! (system call style)
 1. Write a program that uses `write()` to print out "Hi! My name is `<Your Name>`".
+
+```
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+
+int main() {
+  char* str = "Hi! My name is Vlad Petru Nitu";
+  write(1, str, strlen(str));
+}
+```
 ### Hello, Standard Error Stream!
 2. Write a function to print out a triangle of height `n` to standard error.
    - Your function should have the signature `void write_triangle(int n)` and should use `write()`.
    - The triangle should look like this, for n = 3:
-   ```C
+  ```C
    *
    **
    ***
@@ -222,3 +234,4 @@ These are general tips for compiling and developing using a compiler and git. So
 - Find, in your opinion, the best and worst C code on the web and post the link to Ed.
 - Write a short C program with a deliberate subtle C bug and post it on Ed to see if others can spot your bug.
 - Do you have any cool/disastrous system programming bugs you've heard about? Feel free to share with your peers and the course staff on Ed.
+
