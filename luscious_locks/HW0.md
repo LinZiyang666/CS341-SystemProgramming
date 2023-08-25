@@ -400,29 +400,86 @@ void destroy(person_t *person) {
 
 ## Chapter 5 
 
+
 Text input and output and parsing using `getchar`, `gets`, and `getline`.
 
 ### Reading characters, trouble with gets
 1. What functions can be used for getting characters from `stdin` and writing them to `stdout`?
+- `gets` to get chars from `stdin` and `puts` to write them to `stdout`. 
 2. Name one issue with `gets()`.
+- It exposes the program to "Buffer overflow", as `gets()` reads char by char until it finds the first `\n`, so this is why it becomes insecure: an attacker can explore this vulnerability by inputting lots of characters in order to get access to parts of the memory that you do not want them to acces. This way, the attacked may execute code remotely, by overwritting memory areas that you don't want him to access. To conclude, the problem of `gets`is that it does not check for the size of the inputted string.
+
 ### Introducing `sscanf` and friends
 3. Write code that parses the string "Hello 5 World" and initializes 3 variables to "Hello", 5, and "World".
+```
+#include <stdio.h>
+
+int main() {
+  int digit;
+  char str1[6];
+  char str2[6];
+
+  sscanf("Hello 5 World", "%s %d %s", str1, &digit, str2);
+
+  printf("%s\n", str1);
+  printf("%d\n", digit);
+  printf("%s\n", str2);
+
+  return 0;
+}
+```
 ### `getline` is useful
 4. What does one need to define before including `getline()`?
+- `<stdio.h>`
+
 5. Write a C program to print out the content of a file line-by-line using `getline()`.
 
+```
+#include <stdio.h>
+
+int main() {
+
+
+  char *line = NULL;
+  int rd;
+  size_t MAX_SIZE = 256;
+  FILE *f = fopen("file.txt", "r");
+  while((rd = getline(&line, &MAX_SIZE, f)) != -1) {
+    puts(line);
+  }
+
+  return 0;
+}
+
+```
+
 ## C Development
+
 
 These are general tips for compiling and developing using a compiler and git. Some web searches will be useful here
 
 1. What compiler flag is used to generate a debug build?
+- `-g` is the flag for debug build in `gcc` compiler.
 2. You modify the Makefile to generate debug builds and type `make` again. Explain why this is insufficient to generate a new build.
+- As you have to run `make debug` to generate a debug build
 3. Are tabs or spaces used to indent the commands after the rule in a Makefile?
+- Yes, tabs are used for indentation after a rule in a Makefile, as there are no curly brackets (same as in `.yaml` files for example). 
 4. What does `git commit` do? What's a `sha` in the context of git?
+- `git commit` - saves your staged files to your `git` repository.
+- `sha` = the hash value of a commit, in the context of `git`.
 5. What does `git log` show you?
+- Shows a the history of all the commits you have made (to the branch you are located on) in your git repo.
 6. What does `git status` tell you and how would the contents of `.gitignore` change its output?
+
+- `git status` tells you about the files that you have changed and not staged yet, about the files that you have staged but not commited, and whether your not your branch is up to date.
+- The contents of `.gitignore` can change the output in the following way: if `file.c` is mentioned in `.gitignore`, it would not be tracked by git, which means that any modifications to it will not be considered by `git status`. This way, the file `file.c` is only tracked locally, and not in your git repo. 
+
 7. What does `git push` do? Why is it not just sufficient to commit with `git commit -m 'fixed all bugs' `?
+- `git push` adds the commits to the origin branch. It is not sufficient to only commit, as those commits are only saved locally (i.e.: to the local clone of the repo) before pushing them to the remote repository. This way, the other contributors to our `git` repo will be able to see our changes (i.e.: the commits that we have added). 
 8. What does a non-fast-forward error `git push` reject mean? What is the most common way of dealing with this?
+- This means that the head of your local branch and the head of the remote branch are not the same. This may have been caused by another contribution that pushed new changes, and you have not pulled them to your local clone of the repository. Thus, git decides that, in order to not lose any commits, will not allow you to push directly. 
+- The most common way of dealing with it is to `git pull` (which fetches and merges the changes from the remote branch to your local one) before `git push`, so that you have the latest changes. In case of conflicts between the new commits made by a different contributor and your commits, you may solve the changes locally and then push the OK version. 
+
 
 ## Optional (Just for fun)
 - Convert your a song lyrics into System Programming and C code and share on Ed.
