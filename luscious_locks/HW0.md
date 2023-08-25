@@ -363,8 +363,40 @@ int main() {
 
 ### Duplicating strings, memory allocation and deallocation of structures
 Create functions to create and destroy a Person (Person's and their names should live on the heap).
+
 12. `create()` should take a name and age. The name should be copied onto the heap. Use malloc to reserve sufficient memory for everyone having up to ten friends. Be sure initialize all fields (why?).
+
+```
+struct Person {
+  char *name;
+  int age;
+  struct Person *friends[50];
+};
+
+typedef struct Person person_t;
+
+person_t* create(char *name, int age) {
+
+  char *name_cp = strdup(name);
+  person_t *person = (person_t*) malloc(sizeof(person_t));
+  person->name = name_cp;
+  person->age = age;
+  memset(person->friends, 0, sizeof(person->friends)); // Init. this field also, to make sure we clean the memory we have aquired
+  return person;
+}
+
+```
+
 13. `destroy()` should free up not only the memory of the person struct, but also free all of its attributes that are stored on the heap. Destroying one person should not destroy any others.
+
+```
+void destroy(person_t *person) {
+  free(person->name);
+  memset(person->friends, 0, sizeof(person->friends));
+  free(person);
+}
+
+```
 
 ## Chapter 5 
 
@@ -397,5 +429,4 @@ These are general tips for compiling and developing using a compiler and git. So
 - Find, in your opinion, the best and worst C code on the web and post the link to Ed.
 - Write a short C program with a deliberate subtle C bug and post it on Ed to see if others can spot your bug.
 - Do you have any cool/disastrous system programming bugs you've heard about? Feel free to share with your peers and the course staff on Ed.
-
 
