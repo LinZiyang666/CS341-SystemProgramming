@@ -40,7 +40,7 @@ int test_split_str() {
   size_t expected_split_len = get_size(expected_split);
 
   if (obtained_split_len != expected_split_len)
-    return 0; 
+    return 0;
 
   char **walk = expected_split;
   while (*walk) {
@@ -54,11 +54,50 @@ int test_split_str() {
   return *obtained_split == NULL;
 }
 
+int exit_run_test(char **result, int exit_code) {
+  destroy(result);
+  return exit_code;
+}
+
+int run_test(char **(*camelCaser)(const char *), void (*destroy)(char **),
+             char *input, char **expected_output) {
+  char **obtained_output = camel_caser(input);
+
+  size_t expected_output_len = get_size(expected_output);
+  size_t obtained_output_len = get_size(obtained_output);
+
+  if (expected_output_len != obtained_output_len) {
+    return exit_run_test(obtained_output, 0);
+  }
+
+  char **walk_expected = expected_output;
+  char **walk_obtained = expected_output;
+
+  while (*walk_expected && *walk_obtained) {
+    if (strcmp(*walk_expected, *walk_obtained) != 0)
+      return exit_run_test(obtained_output, 0);
+    walk_expected++;
+    walk_obtained++;
+  }
+
+  return exit_run_test(obtained_output, 1);
+}
+
 int test_camelCaser(char **(*camelCaser)(const char *),
                     void (*destroy)(char **)) {
   // TODO: Implement me!
-
+  //
+  char *in =
+      "The Heisenbug is an incredible creature. Facenovel servers get their "
+      "power from its indeterminism. Code smell can be ignored with INCREDIBLE "
+      "use of air freshener. God objects are the new religion.";
+  char *out[] = {"theHeisenbugIsAnIncredibleCreature",
+                 "facenovelServersGetTheirPowerFromItsIndeterminism",
+                 "codeSmellCanBeIgnoredWithIncredibleUseOfAirFreshener",
+                 "godObjectsAreTheNewReligion", NULL};
+  if (run_test(camelCaser, destroy, in, out) == 0)
+    return 0;
 
   // return test_split_str(); -> to test if I split correctly
-  return test_split_str();
+  return 1;
 }
