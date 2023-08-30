@@ -16,7 +16,7 @@ CC = clang
 WARNINGS = -Wall -Wextra -Werror -Wno-error=unused-parameter -Wmissing-declarations -Wmissing-variable-declarations
 CFLAGS_COMMON = $(WARNINGS) -std=c99 -c -MMD -MP -D_GNU_SOURCE
 CFLAGS_RELEASE = $(CFLAGS_COMMON) -O2
-CFLAGS_DEBUG = $(CFLAGS_COMMON) -O0 -g -DDEBUG
+CFLAGS_DEBUG = $(CFLAGS_COMMON) -O0 -gdwarf-4 -DDEBUG
 
 # set up linker
 LD = clang

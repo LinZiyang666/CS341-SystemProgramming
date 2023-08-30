@@ -65,9 +65,8 @@ void camel_case_word(char *word, int first_word) {
       } else {
         *walk = tolower(*walk);
       }
-
-      walk ++;
     }
+      walk ++;
   }
 }
 
