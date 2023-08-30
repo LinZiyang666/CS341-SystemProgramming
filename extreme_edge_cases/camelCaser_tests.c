@@ -120,6 +120,25 @@ int test_camelCaser(char **(*camelCaser)(const char *),
                (char *[]){"12A\ab3c", "", NULL}) == 0) // NOTE: !isspace('\a') == false;  \a (alert) Produces an audible or visible alert without changing the active position.
     return 0;
 
+  // String already terminated test (print nothing)
+  if (run_test(camelCaser, destroy, "abc \0stop.", 
+               (char *[]){NULL}) == 0) 
+    return 0;
+
+  // String already terminated test (print nothing)
+  if (run_test(camelCaser, destroy, " \0stop.", 
+               (char *[]){NULL}) == 0) 
+    return 0;
+  
+  // All caps test
+  if (run_test(camelCaser, destroy, "HI THERE I AM VLAD!", 
+               (char *[]){"hiThereIAmVlad", NULL}) == 0) 
+    return 0;
+  
+  // All lower test
+  if (run_test(camelCaser, destroy, "hi there i am vlad?", 
+               (char *[]){"hiThereIAmVlad", NULL}) == 0)  // same output as above
+    return 0;
   // return test_split_str(); -> to test if I split correctly
   return 1;
 }
