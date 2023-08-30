@@ -54,7 +54,7 @@ void camel_case_word(char *word, int first_word) {
   char *walk = word;
   int first_letter = 0; // first_letter == 1 -> we have passed over the first
                         // letter of the word
-  while (*walk && *walk != ' ') {
+  while (*walk) {
     if (isalpha(*walk)) {
       if (!first_letter) {
         first_letter = 1;
@@ -71,26 +71,28 @@ void camel_case_word(char *word, int first_word) {
 }
 
 void camel_case_str(char *str) {
-  int first_word = 0;
+  int first_word_seen = 0;
   size_t str_len = strlen(str);
   size_t i = 0;
   while (i < str_len) {
     size_t j = i;
     for ( ; j < str_len; ++j) { // for-loop starts from j = i
-      if (!isspace(str[j]) && !first_word)
-        first_word = 1; // mark first word, as it has special rules to camelCase
+      if (!isspace(str[j]) && !first_word_seen)
+        first_word_seen = 1; // mark first word, as it has special rules to camelCase
 
       else if (isspace(str[j]) &&
-               first_word) { // we have to camel case the word!
-        camel_case_word(str + i, first_word);
-        // `remove_space_str`
+               first_word_seen) { // we have to camel case the word!
+        
+        str[j] = '\0'; // NULL byte - to know where to stop
+        camel_case_word(str + i, i == 0); // i == 0 -> still parsing first word
+        str[j] = ' '; // restore space, as we will remove it later on
         break;
       }
 
       else if (j == str_len - 1) // word has ended, but there is no space after
                                  // it => camel case it
       {
-        camel_case_word(str + i, first_word);
+        camel_case_word(str + i, i == 0); // i == 0 -> still parsing first word
         break;
       }
     }
@@ -107,8 +109,9 @@ void remove_spaces_str(char *str) {
     if (!isspace(str[i]))
       new_str[new_str_len++] = str[i];
   }
-  new_str[str_len] = '\0';
+  new_str[new_str_len] = '\0';
   strncpy(str, new_str, new_str_len);
+  str[new_str_len] = '\0';
   free(new_str);
 }
 
@@ -120,7 +123,7 @@ char **camel_caser(const char *input_str) {
       split_str(input_str); // TODO: Make sure to deallocate after returning
 
   char **walk = splitted;
-  if (*walk) {
+  while (*walk) {
     camel_case_str(*walk); // A input sentence, input_s, is defined as any
                            // MAXIMAL substring of the input string that ends
                            // with a punctuation mark. (!) First camel case the

@@ -71,7 +71,7 @@ int run_test(char **(*camelCaser)(const char *), void (*destroy)(char **),
   }
 
   char **walk_expected = expected_output;
-  char **walk_obtained = expected_output;
+  char **walk_obtained = obtained_output;
 
   while (*walk_expected && *walk_obtained) {
     if (strcmp(*walk_expected, *walk_obtained) != 0)
@@ -98,7 +98,8 @@ int test_camelCaser(char **(*camelCaser)(const char *),
   if (run_test(camelCaser, destroy, in, out) == 0)
     return 0;
 
-  if (run_test(camelCaser, destroy, "123Abc! 345Efg mOM, 7.,!", (char *[]){"123Abc! 345Efg mOM, 7.,!"}) == 0)
+  if (run_test(camelCaser, destroy, "123Abc! 345Efg mOM, 7.,!",
+               (char *[]){"123abc", "345efgMom", "7", "", "", NULL}) == 0)
     return 0;
 
   // return test_split_str(); -> to test if I split correctly
