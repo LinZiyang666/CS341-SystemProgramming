@@ -30,9 +30,9 @@ int test_split_str() {
 
   char *expected_split[] = {
       "The Heisenbug is an incredible creature",
-      "Facenovel servers get their power from its indeterminism",
-      "Code smell can be ignored with INCREDIBLE use of air freshener",
-      "God objects are the new religion", NULL};
+      " Facenovel servers get their power from its indeterminism",
+      " Code smell can be ignored with INCREDIBLE use of air freshener",
+      " God objects are the new religion", NULL};
 
   char **obtained_split = split_str(input_str);
 
@@ -60,5 +60,5 @@ int test_camelCaser(char **(*camelCaser)(const char *),
 
 
   // return test_split_str(); -> to test if I split correctly
-  return 1;
+  return test_split_str();
 }
