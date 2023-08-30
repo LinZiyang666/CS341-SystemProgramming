@@ -98,8 +98,24 @@ int test_camelCaser(char **(*camelCaser)(const char *),
   if (run_test(camelCaser, destroy, in, out) == 0)
     return 0;
 
-  if (run_test(camelCaser, destroy, "123Abc! 345Efg mOM, 7.,!",
+  if (run_test(camelCaser, destroy, "123Abc! 345Efg mOM, 7.,!",// multibehavior test
                (char *[]){"123abc", "345efgMom", "7", "", "", NULL}) == 0)
+    return 0;
+
+  if (run_test(camelCaser, destroy, "1\tab3! 345Efg mOM, 7.,!", // \t test
+               (char *[]){"1Ab3", "345efgMom", "7", "", "", NULL}) == 0)
+    return 0;
+
+  if (run_test(camelCaser, destroy, ",.!?", // Full punctuation test
+               (char *[]){"", "", "", "", NULL}) == 0)
+    return 0;
+
+  if (run_test(camelCaser, destroy, " ?. ", // Punctuation & spaces only
+               (char *[]){"", "", NULL}) == 0)
+    return 0;
+
+  if (run_test(camelCaser, destroy, "1\t2a\ab3c!?", // Combination tabs, digits & letters
+               (char *[]){"12A\ab3c", "", NULL}) == 0) // NOTE: !isspace('\a') == false;  \a (alert) Produces an audible or visible alert without changing the active position.
     return 0;
 
   // return test_split_str(); -> to test if I split correctly
