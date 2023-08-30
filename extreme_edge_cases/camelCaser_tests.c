@@ -22,6 +22,7 @@ size_t get_size(char **split) {
   return size;
 }
 
+/* Fails to compile on Autograder. as `split_str` is not known
 int test_split_str() {
   const char *input_str =
       "The Heisenbug is an incredible creature. Facenovel servers get their "
@@ -53,21 +54,23 @@ int test_split_str() {
 
   return *obtained_split == NULL;
 }
+*/ 
 
-int exit_run_test(char **result, int exit_code) {
+int exit_run_test(char **result, int exit_code, void (*destroy)(char **)) {
   destroy(result);
   return exit_code;
 }
 
 int run_test(char **(*camelCaser)(const char *), void (*destroy)(char **),
              char *input, char **expected_output) {
-  char **obtained_output = camel_caser(input);
+
+  char **obtained_output = camelCaser(input);
 
   size_t expected_output_len = get_size(expected_output);
   size_t obtained_output_len = get_size(obtained_output);
 
   if (expected_output_len != obtained_output_len) {
-    return exit_run_test(obtained_output, 0);
+    return exit_run_test(obtained_output, 0, destroy);
   }
 
   char **walk_expected = expected_output;
@@ -75,18 +78,17 @@ int run_test(char **(*camelCaser)(const char *), void (*destroy)(char **),
 
   while (*walk_expected && *walk_obtained) {
     if (strcmp(*walk_expected, *walk_obtained) != 0)
-      return exit_run_test(obtained_output, 0);
+      return exit_run_test(obtained_output, 0, destroy);
     walk_expected++;
     walk_obtained++;
   }
 
-  return exit_run_test(obtained_output, 1);
+  return exit_run_test(obtained_output, 1, destroy);
 }
 
 int test_camelCaser(char **(*camelCaser)(const char *),
                     void (*destroy)(char **)) {
-  // TODO: Implement me!
-  //
+
   char *in =
       "The Heisenbug is an incredible creature. Facenovel servers get their "
       "power from its indeterminism. Code smell can be ignored with INCREDIBLE "
