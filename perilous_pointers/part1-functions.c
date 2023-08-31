@@ -2,6 +2,7 @@
  * perilous_pointers
  * CS 341 - Fall 2023
  */
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,7 +21,8 @@
  *     The grade to check.
  */
 void one(const char *grade) {
-    if (grade > 70)
+    float numeric_grade = strtof(grade, NULL);
+    if (numeric_grade > 70)
         printf("%f passed!\n", numeric_grade);
     else
         printf("%s not passed!\n", grade);
@@ -32,7 +34,7 @@ void one(const char *grade) {
  */
 void two() {
     int x = 4;
-    int *p = x;
+    int *p = &x;
     printf("The value of p is: %d\n", *p);
 }
 
@@ -48,7 +50,7 @@ void two() {
  *     Second input parameter.
  */
 void three(const int *x, const int *y) {
-    if (x == y)
+    if (*x == *y)
         printf("x and y are equal.\n");
     else
         printf("x and y are different.\n");
@@ -67,7 +69,8 @@ void three(const int *x, const int *y) {
  *     contains the value of the input parameter.
  */
 float *four(const int *x) {
-    float *p = *x;
+    float *p = malloc(sizeof(float));
+    *p = *x; 
     printf("%d == %f\n", *x, *p);
     return p;
 }
@@ -81,7 +84,7 @@ float *four(const int *x) {
  *
  */
 void five(const char *a) {
-    if (a >= 'A' && a <= 'z')
+    if (isupper(*a) && islower(*a))
         printf("a is a letter.\n");
     else
         printf("a is not a letter.\n");
@@ -92,9 +95,16 @@ void five(const char *a) {
  * valid c string, and prints the concatenated string.
  */
 void six(const char *str) {
-    char *s = "Hello ";
+    char *ct = "Hello ";
+    char *s = malloc (sizeof(strlen(ct)) + 1 + strlen(str) + 1);
+
+    strcpy(s, ct);
     strcat(s, str);
+
     printf("%s\n", s);
+
+    free(s);
+    s = NULL;
 }
 
 /**
