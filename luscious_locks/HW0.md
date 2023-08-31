@@ -91,7 +91,7 @@ In which our intrepid hero battles standard out, standard error, file descriptor
 ### Hello, World! (system call style)
 1. Write a program that uses `write()` to print out "Hi! My name is `<Your Name>`".
 
-```
+```C
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -99,6 +99,7 @@ In which our intrepid hero battles standard out, standard error, file descriptor
 int main() {
   char* str = "Hi! My name is Vlad Petru Nitu";
   write(1, str, strlen(str));
+  return 0; 
 }
 ```
 ### Hello, Standard Error Stream!
@@ -112,7 +113,7 @@ int main() {
    ***
    ```
 
-   ```
+   ```C
    #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -122,11 +123,11 @@ void write_triangle(int n) {
     write(2, "***", i);
     write(2, "\n", 1);
   }
-  return;
 }
 
 int main() {
   write_triangle(3);
+  return 0;
 }
 
    ```
@@ -134,7 +135,7 @@ int main() {
 3. Take your program from "Hello, World!" modify it write to a file called `hello_world.txt`.
    - Make sure to to use correct flags and a correct mode for `open()` (`man 2 open` is your friend).
 
-```
+```C
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -146,6 +147,7 @@ int main() {
   int fd = open("hello_world.txt", O_CREAT | O_RDWR | O_TRUNC, S_IRUSR | S_IWUSR);
   write(fd, str, strlen(str));
   close(fd);
+  return 0;
 }
 
    ```
@@ -153,7 +155,7 @@ int main() {
 4. Take your program from "Writing to files" and replace `write()` with `printf()`.
    - Make sure to print to the file instead of standard out!
    
-```
+```C
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -162,8 +164,10 @@ int main() {
 
 int main() {
   const char* str = "Hi! My name is Vlad Petru Nitu";
-  FILE *file = fopen("hello_world.txt", "w");
-  fprintf(file, "%s\n", str);
+  close(1);
+  int fd = open("hello_world.txt", O_CREAT | O_RDWR | O_TRUNC, S_IRUSR | S_IWUSR);
+  printf("%s\n", str); 
+  return 0;
 }
 ```
 
@@ -180,13 +184,14 @@ Sizing up C types and their limits, `int` and `char` arrays, and incrementing po
 
 ### Not all bytes are 8 bits?
 1. How many bits are there in a byte?
-In general: 1 Byte = 8 bits, but as the name of this chapter says: the number of bits in a byte can vary from system to system. Thus, 1 byte is AT LEAST 8 bits.
-2. How many bytes are there in a `char`? 1 char = 1 byte
+- In general: 1 Byte = 8 bits, but as the name of this chapter says: the number of bits in a byte can vary from system to system. Thus, 1 byte is AT LEAST 8 bits.
+2. How many bytes are there in a `char`? 
+- 1 char = 1 byte
 3. How many bytes the following are on your machine?
    - `int`, `double`, `float`, `long`, and `long long`
    - 4 bytes, 8 bytes, 4 bytes, 8 bytes, 8 bytes
    - Proof:
-```
+```C
    #include <stdio.h>
 
 int main() {
@@ -195,6 +200,7 @@ int main() {
   printf("%ld\n", sizeof(float));
   printf("%ld\n", sizeof(long));
   printf("%ld\n", sizeof(long long));
+  return 0;
 }
 
 ```
@@ -210,7 +216,7 @@ If the address of data is `0x7fbd9d40`, then what is the address of `data+2`?
 
 5. What is `data[3]` equivalent to in C?
    - Hint: what does C convert `data[3]` to before dereferencing the address?
-   - *(data + 3)
+   - `*(data + 3)` and `3[data]`
 
 ### `sizeof` character arrays, incrementing pointers
   
@@ -221,12 +227,12 @@ Remember, the type of a string constant `"abc"` is an array.
 char *ptr = "hello";
 *ptr = 'J';
 ```
-Because `char *ptr` points to the TEXT segment, where the string literal "hello" is stored. This memory is a READ_ONLY memory, and we try to write in that memory by `*ptr = 'J'`, this is why we get a segfault.
+- Because `char *ptr` points to the TEXT segment, where the string literal "hello" is stored. This memory is a READ_ONLY memory, and we try to write in that memory by `*ptr = 'J'`, this is why we get a segfault.
 
 7. What does `sizeof("Hello\0World")` return?
 - 12
 8. What does `strlen("Hello\0World")` return?
-- 5, as it counts the number of characters until finding `\0` = the null character.
+- 5, as it counts the number of characters until finding the first `\0` = the null character.
 9. Give an example of X such that `sizeof(X)` is 3.
 - `char *X = "ab";` 
 10. Give an example of Y such that `sizeof(Y)` might be 4 or 8 depending on the machine.
@@ -238,16 +244,15 @@ Program arguments, environment variables, and working with character arrays (str
 
 ### Program arguments, `argc`, `argv`
 1. What are two ways to find the length of `argv`?
-- argc - 1
-- sizeof(argv) / sizeof(argv[0]))
+- argc
+- Traversing the `argv` array of char pointers (char *) until we find "NULL", and incrementing a counter that starts from 0 for each not-NULL string encountered.
 
 2. What does `argv[0]` represent?
 -  The name of the executable that we run. 
 
 ### Environment Variables
 3. Where are the pointers to environment variables stored (on the stack, the heap, somewhere else)?
-- Somewhere else, directly above the stack. See the memory layout that was discussed in the first lecture (i.e: draw of professor, where "Program Arguments" is). 
--
+- Somewhere else, between the stack and the Kernel. See the memory layout that was discussed in the first lecture (i.e: draw of professor, where "Program Arguments" is). When we start the program, the stack is empty and it starts growing downwards.
 ### String searching (strings are just char arrays)
 4. On a machine where pointers are 8 bytes, and with the following code:
 ```C
@@ -261,7 +266,7 @@ What are the values of `sizeof(ptr)` and `sizeof(array)`? Why?
 ### Lifetime of automatic variables
 
 5. What data structure manages the lifetime of automatic variables?
-- The stack. Automatic variable are allocated on the stack, for the lifetime of the function, and then deallocated, when the scope of the function ends.
+- The stack. Automatic variable are pushed on the stack, for the lifetime of the function, and then popped, when the scope of the function ends.
 
 ## Chapter 4
 
@@ -270,12 +275,11 @@ Heap and stack memory, and working with structs
 ### Memory allocation using `malloc`, the heap, and time
 1. If I want to use data after the lifetime of the function it was created in ends, where should I put it? How do I put it there?
 - I should put it on the heap. I put it there by allocating memory (i.e: using `malloc(X)`, which asks the kernel for X bytes of memory. 
-- An alternative would be to mark the variable as `static`, as this would make the variable persist in memory for the lifetime of the program. 
 
 2. What are the differences between heap and stack memory?
-- The stack is faster, as we only push and pop variables on it, and we can navigate it using the base pointer (BP). The heap is slower, as it allocates memory and this is a tedious process. Both are stored in RAM. Stack does static memory allocation, while the heap allocates memory dynamically. 
+- The stack is faster, as we only push and pop variables on it, and we can navigate it using the base pointer (BP). The heap is slower, as it allocates memory and this is a tedious process. Both are stored in RAM (Memory). Stack does static memory allocation, while the heap allocates memory dynamically. 
 3. Are there other kinds of memory in a process?
-- Yes, see C memory layout: TEXT segmemnt, DATA (Initialized variables), .bss (Uninitialized variables).
+- Yes, see C memory layout: TEXT segment (i.e.: where the code lives in), DATA (Initialized variables), .bss (Uninitialized variables), etc.
 4. Fill in the blank: "In a good C program, for every malloc, there is a free".
 ### Heap allocation gotchas
 5. What is one reason `malloc` can fail?
@@ -299,22 +303,23 @@ printf("%s\n", ptr);
 
 9. How can one avoid the previous two mistakes? 
 - By using memory error detector tools, such as "Memcheck" from Valgrind.
+- By setting the `ptr = NULL` after calling `free(ptr)` (deallocating it).
 
 ### `struct`, `typedef`s, and a linked list
 10. Create a `struct` that represents a `Person`. Then make a `typedef`, so that `struct Person` can be replaced with a single word. A person should contain the following information: their name (a string), their age (an integer), and a list of their friends (stored as a pointer to an array of pointers to `Person`s).
 
-```
+```C
 struct Person {
   char *name;
   int age;
-  struct Person *friends[50];
+  struct Person *friends[10];
 };
 
 typedef struct Person person_t; 
 ```
 11. Now, make two persons on the heap, "Agent Smith" and "Sonny Moore", who are 128 and 256 years old respectively and are friends with each other.
 
-```
+```C
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -322,7 +327,7 @@ typedef struct Person person_t;
 struct Person {
   char *name;
   int age;
-  struct Person *friends[50];
+  struct Person *friends[10];
 };
 
 typedef struct Person person_t;
@@ -334,6 +339,7 @@ void print_person(person_t *person) {
   printf("%s ", person->friends[0]->name);
   printf("%d\n", person->friends[0]->age);
 }
+
 int main() {
   person_t *person1 = (person_t*) malloc(sizeof(person_t));
   person1->name = "Agent Smith";
@@ -356,8 +362,12 @@ int main() {
   //Clear
   memset(person1->friends, 0, sizeof(person1->friends));
   memset(person2->friends, 0, sizeof(person2->friends));
+  
   free(person1);
+  person1 = NULL;
+
   free(person2);
+  person2 = NULL;
 }
 ```
 
@@ -366,11 +376,11 @@ Create functions to create and destroy a Person (Person's and their names should
 
 12. `create()` should take a name and age. The name should be copied onto the heap. Use malloc to reserve sufficient memory for everyone having up to ten friends. Be sure initialize all fields (why?).
 
-```
+```C
 struct Person {
   char *name;
   int age;
-  struct Person *friends[50];
+  struct Person *friends[10];
 };
 
 typedef struct Person person_t;
@@ -389,11 +399,15 @@ person_t* create(char *name, int age) {
 
 13. `destroy()` should free up not only the memory of the person struct, but also free all of its attributes that are stored on the heap. Destroying one person should not destroy any others.
 
-```
+```C
 void destroy(person_t *person) {
   free(person->name);
+  person->name = NULL;
+
   memset(person->friends, 0, sizeof(person->friends));
+
   free(person);
+  person = NULL;
 }
 
 ```
@@ -406,12 +420,15 @@ Text input and output and parsing using `getchar`, `gets`, and `getline`.
 ### Reading characters, trouble with gets
 1. What functions can be used for getting characters from `stdin` and writing them to `stdout`?
 - `gets` to get chars from `stdin` and `puts` to write them to `stdout`. 
+- Alternatives: `getline` for reading
+- Alternaties (system calls): `read` and `write`
+
 2. Name one issue with `gets()`.
 - It exposes the program to "Buffer overflow", as `gets()` reads char by char until it finds the first `\n`, so this is why it becomes insecure: an attacker can explore this vulnerability by inputting lots of characters in order to get access to parts of the memory that you do not want them to acces. This way, the attacked may execute code remotely, by overwritting memory areas that you don't want him to access. To conclude, the problem of `gets`is that it does not check for the size of the inputted string.
 
 ### Introducing `sscanf` and friends
 3. Write code that parses the string "Hello 5 World" and initializes 3 variables to "Hello", 5, and "World".
-```
+```C
 #include <stdio.h>
 
 int main() {
@@ -419,7 +436,12 @@ int main() {
   char str1[6];
   char str2[6];
 
-  sscanf("Hello 5 World", "%s %d %s", str1, &digit, str2);
+  int cmp = sscanf("Hello 5 World", "%s %d %s", str1, &digit, str2);
+
+  if (cmp != 3) {
+    printf("sscanf failed\n");
+    exit(1);
+  }
 
   printf("%s\n", str1);
   printf("%d\n", digit);
@@ -430,24 +452,33 @@ int main() {
 ```
 ### `getline` is useful
 4. What does one need to define before including `getline()`?
-- `<stdio.h>`
+- `#include <stdio.h>`
+- Before using `getline()`, we should define a `char *buffer` and `int capacity`.
 
 5. Write a C program to print out the content of a file line-by-line using `getline()`.
 
-```
+```C
 #include <stdio.h>
+#include <stdlib.h>
 
 int main() {
-
-
   char *line = NULL;
   int rd;
   size_t MAX_SIZE = 256;
   FILE *f = fopen("file.txt", "r");
+
+  if (!f) { 
+    perror("fopen failed");
+    exit(1);
+  }
+
   while((rd = getline(&line, &MAX_SIZE, f)) != -1) {
     puts(line);
   }
 
+  free(line);
+  line = NULL;
+  fclose(f);
   return 0;
 }
 
@@ -466,7 +497,7 @@ These are general tips for compiling and developing using a compiler and git. So
 - Yes, tabs are used for indentation after a rule in a Makefile, as there are no curly brackets (same as in `.yaml` files for example). 
 4. What does `git commit` do? What's a `sha` in the context of git?
 - `git commit` - saves your staged files to your `git` repository.
-- `sha` = the hash value of a commit, in the context of `git`.
+- `sha` = the hash value of a commit, that uniquely identifies this specific commit in the context of the `git` repository it lives in.
 5. What does `git log` show you?
 - Shows a the history of all the commits you have made (to the branch you are located on) in your git repo.
 6. What does `git status` tell you and how would the contents of `.gitignore` change its output?
@@ -486,4 +517,5 @@ These are general tips for compiling and developing using a compiler and git. So
 - Find, in your opinion, the best and worst C code on the web and post the link to Ed.
 - Write a short C program with a deliberate subtle C bug and post it on Ed to see if others can spot your bug.
 - Do you have any cool/disastrous system programming bugs you've heard about? Feel free to share with your peers and the course staff on Ed.
+
 
