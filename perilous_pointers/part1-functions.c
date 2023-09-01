@@ -119,10 +119,7 @@ void seven() {
         values[i] = (float)i / n;
 
     for (i = 0; i < n; i++)
-        if ( i != n - 1 )
-          printf("%f ", values[i]);
-        else 
-          printf("%f", values[i]);
+        printf("%f ", values[i]);
     printf("\n");
 
     free(values); 
