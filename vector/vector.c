@@ -183,27 +183,28 @@ size_t vector_capacity(vector *this)
 {
     assert(this);
     // your code here
-    return this -> capacity;
+    return this->capacity;
 }
 
 bool vector_empty(vector *this)
 {
     assert(this);
     // your code here
-    return this -> size == 0;
+    return this->size == 0;
 }
 
-    /*
-    NOTE:
-    The capacity of a vector can be explicitly altered by calling vector_reserve().
-    */
+/*
+NOTE:
+The capacity of a vector can be explicitly altered by calling vector_reserve().
+*/
 void vector_reserve(vector *this, size_t n)
 {
     assert(this);
     // your code here
-    if (n > this -> capacity) {
-        this -> capacity = get_new_capacity(n);
-        this -> array = (void **) realloc(this -> array, this -> capacity * sizeof (void *));
+    if (n > this->capacity)
+    {
+        this->capacity = get_new_capacity(n);
+        this->array = (void **)realloc(this->array, this->capacity * sizeof(void *));
     }
 }
 
@@ -211,63 +212,117 @@ void **vector_at(vector *this, size_t position)
 {
     assert(this);
     // your code here
-    return NULL;
+    assert(position < this->size);
+    return this->array + position;
 }
 
 void vector_set(vector *this, size_t position, void *element)
 {
     assert(this);
     // your code here
+    assert(position < this->size);
+    this->destructor(this->array[position]);
+    this->array[position] = this->copy_constructor(element);
 }
 
 void *vector_get(vector *this, size_t position)
 {
     assert(this);
     // your code here
-    return NULL;
+    assert(position < this->size);
+    return this->array[position];
 }
 
 void **vector_front(vector *this)
 {
     assert(this);
     // your code here
-    return NULL;
+    assert(this->size != 0); // Calling this function on an empty container causes undefined behavior.
+    return this->array;
 }
 
 void **vector_back(vector *this)
 {
+    assert(this);
     // your code here
-    return NULL;
+    assert(this->size != 0); // Calling this function on an empty container causes undefined behavior.
+    return this->array + this->size - 1;
 }
 
 void vector_push_back(vector *this, void *element)
 {
     assert(this);
     // your code here
+
+    this->size++;
+
+    if (this->size > this->capacity)
+    { // The newly added element surpassed the current vector capacity.
+        vector_reserve(this, this->size);
+    }
+    this->array[this->size - 1] = this->copy_constructor(element);
 }
 
 void vector_pop_back(vector *this)
 {
     assert(this);
     // your code here
+    assert(this->size != 0);                       // According to C++ docs: pop_back on empty container is UB
+    this->destructor(this->array[this->size - 1]); // Alternative: this -> destructor (*vector_back(this));
+    this->size--;
 }
 
 void vector_insert(vector *this, size_t position, void *element)
 {
     assert(this);
     // your code here
+
+    /*
+        inserting elements
+        in positions other than the vector end causes the container to relocate all
+        the elements that were after position to their new positions
+    */
+
+    assert(position < this -> size);
+    size_t old_size = this -> size;
+    this->size++;
+
+    if (this->size > this->capacity)
+    {
+        vector_reserve(this, this->size);
+    }
+
+    for (size_t i = position; i < old_size - 1; ++i) {
+        this -> destructor(this -> array[i + 1]);
+        this -> array[i + 1] = this -> copy_constructor(this -> array[i]);
+    }
+    
+    this -> destructor(this -> array[position]);
+    this -> array[position] = this -> copy_constructor(element);
 }
 
 void vector_erase(vector *this, size_t position)
 {
     assert(this);
-    assert(position < vector_size(this));
     // your code here
+    assert(position < vector_size(this));
+    size_t old_size = this -> size;
+    this -> size --;
+
+    for (size_t i = position; i < old_size - 1; ++i) {
+        this -> destructor(this -> array[i]);
+        this -> array[i] = this -> copy_constructor(this -> array[i + 1]);
+    }
+    this -> destructor(this -> array[this -> size]);
 }
 
 void vector_clear(vector *this)
 {
     // your code here
+    for (size_t i = 0; i < this -> size; ++i)
+        this->destructor(this->array[i]);
+
+    this->size = 0;
 }
 
 // The following is code generated:
