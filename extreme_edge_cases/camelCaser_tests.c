@@ -9,12 +9,17 @@
 #include "camelCaser.h"
 #include "camelCaser_tests.h"
 
+/// @brief Compute the number of C-string  in the table of camel cased C-strings
+/// @param split table of camel cased C-strings
+/// @return `size_t` representing number of camel cased C-strings
 size_t get_size(char **split) {
+
   if (split == NULL)
     return 0;
 
   size_t size = 0;
   char **walk = split;
+
   while (*walk) {
     size++;
     walk++;
@@ -56,11 +61,22 @@ int test_split_str() {
 }
 */ 
 
+/// @brief Auxiliar method that is called after we end running a test (i.e.: after `run_test` method call ends)
+/// @param result obtained output by calling `camelCaser` method implementation of CS341 staff that we have to test.
+/// @param exit_code  1, if successful, 0 otherwise
+/// @param destroy  function pointer of CS341 staff implementation of `destroy` method that we have to test
+/// @return exit code
 int exit_run_test(char **result, int exit_code, void (*destroy)(char **)) {
   destroy(result);
   return exit_code;
 }
 
+/// @brief Helper method to reduce test code; Runs `camelCaser` on `input` and stores the result in `char **obtained_output`; then compares `obtained_output` to `expected_output` for containing the same content
+/// @param camelCaser function pointer of CS341 staff implementation of `camel_caser` method that we have to test 
+/// @param destroy  function pointer of CS341 staff implementation of `destroy` method that we have to test
+/// @param input the C-string that I input for this specific test case scenario
+/// @param expected_output the table of camel-cased C-strings that is expected.
+/// @return 1, if successful, 0 else.
 int run_test(char **(*camelCaser)(const char *), void (*destroy)(char **),
              char *input, char **expected_output) {
 
