@@ -292,9 +292,8 @@ void vector_insert(vector *this, size_t position, void *element)
         vector_reserve(this, this->size);
     }
 
-    for (size_t i = position; i < old_size - 1; ++i) {
-        this -> destructor(this -> array[i + 1]);
-        this -> array[i + 1] = this -> copy_constructor(this -> array[i]);
+    for (size_t i = old_size - 1; i >= position; --i) {
+        this -> array[i + 1] = this -> array[i];
     }
     
     this -> destructor(this -> array[position]);
