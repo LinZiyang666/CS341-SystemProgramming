@@ -114,17 +114,23 @@ void vector_destroy(vector *this)
 
     assert(this);
 
-    for (size_t i = 0; i < this->capacity; ++i)
+    for (size_t i = 0; i < this->size; ++i) 
+    if (this->array[i] != NULL) {
         this->destructor(this->array[i]); // By: calling on the `user provided destructor` for every element
+        this->array[i] = NULL;
+    }
 
     // and deallocates all the storage capacity allocated by the 'vector' constructor.
     free(this->array);
+    this->array = NULL;
     free(this);
-    this = NULL;
 }
 
 void **vector_begin(vector *this)
 {
+
+    assert(this);
+    assert(this->size != 0);
     return this->array + 0;
 }
 
@@ -318,8 +324,10 @@ void vector_erase(vector *this, size_t position)
 void vector_clear(vector *this)
 {
     // your code here
-    for (size_t i = 0; i < this -> size; ++i)
+    for (size_t i = 0; i < this -> size; ++i) {
         this->destructor(this->array[i]);
+        this->array[i] = NULL;
+    }
 
     this->size = 0;
 }
