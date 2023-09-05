@@ -95,6 +95,63 @@ int main(int argc, char *argv[])
     sstring_destroy(str1);
     vector_destroy(v2);
 
+
+    // test 3.3 (edge case ?) -> Test SString Split Hard: Test sstring_split where the result have empty strings.
+    str1 = cstr_to_sstring("Mom has a car!");
+    v1 = sstring_split(str1, 'q');
+
+    printf("Expected: Mom has a car!, got: %s\n", (char *)*vector_begin(v1));
+    assert(equals_string((char *)*vector_begin(v1), "Mom has a car!"));
+
+    sstring_destroy(str1);
+    vector_destroy(v1);
+
+    // test 3.4 (edge case ?) -> Test SString Split Hard: Test sstring_split where the result have empty strings.
+    str1 = cstr_to_sstring("abc");
+    v1 = sstring_split(str1, 'a');
+
+    printf("Expected: , got: %s\n", (char *)*vector_begin(v1));
+    assert(equals_string((char *)*vector_begin(v1), ""));
+
+    printf("Expected: bc!, got: %s\n", (char *)*vector_at(v1, (size_t) 1));
+    assert(equals_string((char *)*vector_at(v1, (size_t) 1), "bc"));
+
+    sstring_destroy(str1);
+    vector_destroy(v1);
+
+    // test 3.5 (edge case ?) -> Test SString Split Hard: Test sstring_split where the result have empty strings.
+    str1 = cstr_to_sstring("aaaa");
+    v1 = sstring_split(str1, 'a');
+
+    assert(equals_string((char *)*vector_begin(v1), ""));
+    assert(equals_string((char *)*vector_at(v1, (size_t) 1), ""));
+    assert(equals_string((char *)*vector_at(v1, (size_t) 2), ""));
+    assert(equals_string((char *)*vector_at(v1, (size_t) 3), ""));
+
+    sstring_destroy(str1);
+    vector_destroy(v1);
+
+    // HERE WAS THE ERROR!: test 3.6 (edge case ?) -> Test SString Split Hard: Test sstring_split where the result have empty strings.
+    str1 = cstr_to_sstring("bca");
+    v1 = sstring_split(str1, 'a');
+
+    assert(equals_string((char *)*vector_at(v1, (size_t) 0), "bc"));
+    assert(equals_string((char *)*vector_at(v1, (size_t) 1), ""));
+
+    sstring_destroy(str1);
+    vector_destroy(v1);
+
+    // HERE WAS THE ERROR!: test 3.7 (edge case ?) -> Test SString Split Hard: Test sstring_split where the result have empty strings.
+    str1 = cstr_to_sstring("abca");
+    v1 = sstring_split(str1, 'a');
+
+    assert(equals_string((char *)*vector_begin(v1), ""));
+    assert(equals_string((char *)*vector_at(v1, (size_t) 1), "bc"));
+    assert(equals_string((char *)*vector_at(v1, (size_t) 2), ""));
+
+    sstring_destroy(str1);
+    vector_destroy(v1);
+
     // test 4.1 & 4.2: sstring_split
     //  *
     //  * sstring *replace_me = cstr_to_sstring("This is a {} day, {}!");

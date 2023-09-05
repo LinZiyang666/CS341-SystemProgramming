@@ -61,6 +61,10 @@ vector *sstring_split(sstring *this, char delimiter) {
             *substr_end = '\0'; // delimit substring's endpoint
             vector_push_back(v, str); 
             *substr_end = aux; // restore value
+
+            if (substr_end == end - 1 && *substr_end == delimiter) // (!) edge case: i.e: "bca".split("a") -> ["bc", ""]; this if ensures that we add the last empty str (when the delimiter is on the last pos)
+                 vector_push_back(v, ""); 
+
             str = substr_end + 1; // skip to advance in for-loop
         }
     }

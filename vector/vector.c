@@ -114,11 +114,12 @@ void vector_destroy(vector *this)
 
     assert(this);
 
-    for (size_t i = 0; i < this->size; ++i) 
-    if (this->array[i] != NULL) {
-        this->destructor(this->array[i]); // By: calling on the `user provided destructor` for every element
-        this->array[i] = NULL;
-    }
+    for (size_t i = 0; i < this->size; ++i)
+        if (this->array[i] != NULL)
+        {
+            this->destructor(this->array[i]); // By: calling on the `user provided destructor` for every element
+            this->array[i] = NULL;
+        }
 
     // and deallocates all the storage capacity allocated by the 'vector' constructor.
     free(this->array);
@@ -289,8 +290,9 @@ void vector_insert(vector *this, size_t position, void *element)
         the elements that were after position to their new positions
     */
 
-    assert(position < this -> size);
-    size_t old_size = this -> size;
+    assert(position <= this->size); // (!) We can insert before `vector_end` => same as push_back
+
+    size_t old_size = this->size;
     this->size++;
 
     if (this->size > this->capacity)
@@ -298,12 +300,13 @@ void vector_insert(vector *this, size_t position, void *element)
         vector_reserve(this, this->size);
     }
 
-    for (size_t i = old_size - 1; i >= position; --i) {
-        this -> array[i + 1] = this -> copy_constructor(this -> array[i]);
-        this -> destructor (this -> array[i]);
+    for (size_t i = old_size - 1; i >= position; --i)
+    {
+        this->array[i + 1] = this->copy_constructor(this->array[i]);
+        this->destructor(this->array[i]);
     }
-    
-    this -> array[position] = this -> copy_constructor(element);
+
+    this->array[position] = this->copy_constructor(element);
 }
 
 void vector_erase(vector *this, size_t position)
@@ -311,20 +314,22 @@ void vector_erase(vector *this, size_t position)
     assert(this);
     // your code here
     assert(position < vector_size(this));
-    size_t old_size = this -> size;
-    this -> size --;
+    size_t old_size = this->size;
+    this->size--;
 
-    for (size_t i = position; i < old_size - 1; ++i) {
-        this -> destructor(this -> array[i]);
-        this -> array[i] = this -> copy_constructor(this -> array[i + 1]);
+    for (size_t i = position; i < old_size - 1; ++i)
+    {
+        this->destructor(this->array[i]);
+        this->array[i] = this->copy_constructor(this->array[i + 1]);
     }
-    this -> destructor(this -> array[this -> size]);
+    this->destructor(this->array[this->size]);
 }
 
 void vector_clear(vector *this)
 {
     // your code here
-    for (size_t i = 0; i < this -> size; ++i) {
+    for (size_t i = 0; i < this->size; ++i)
+    {
         this->destructor(this->array[i]);
         this->array[i] = NULL;
     }

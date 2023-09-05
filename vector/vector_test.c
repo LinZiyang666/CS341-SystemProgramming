@@ -259,6 +259,15 @@ void run_test_2(int **arr, size_t n)
     vector_erase(v, 2);
     print_int_vector("After erase v[2] = 1", v);
 
+    // Edge case: insert at end
+    print_int_vector("Before insert at end (push_back behavior)", v);
+    elem = (int *) malloc(sizeof(int));
+    *elem = 6;
+    vector_insert(v, vector_size(v), elem);
+    free(elem);
+    print_int_vector("After insert at end (push_back behavior)", v);
+
+
     // // Test: clear
     puts("*****************************");
     vector_clear(v);
