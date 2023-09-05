@@ -34,8 +34,8 @@ char *sstring_to_cstr(sstring *input) {
 
 int sstring_append(sstring *this, sstring *addition) {
     // your code goes here
-    this->str = realloc(this->str, strlen(this->str) + 1 + strlen(addition) + 1);
-    strcat(this->str, addition);
+    this->str = realloc(this->str, strlen(this->str) + 1 + strlen(addition->str) + 1);
+    strcat(this->str, addition->str);
     return strlen(this->str);
 }
 
@@ -47,7 +47,8 @@ vector *sstring_split(sstring *this, char delimiter) {
 
     // lets use `strchr`
     char *str = this -> str;
-    size_t end = str + strlen(str);
+    char *end = str + strlen(str);
+
     while (str < end) {
         // substring: s[str .. substrend - 1]
         char *substr_end = strchr(str, delimiter);
@@ -75,10 +76,19 @@ int sstring_substitute(sstring *this, size_t offset, char *target,
     char *next = strstr(this->str + offset, target);
     if (next == NULL) return -1;
     else {
-        char *aux = malloc(strlen(this->str) + 1 - strlen(target) + strlen(substitution));
+        size_t total_nbytes = strlen(this->str) + 1 - strlen(target) + strlen(substitution); 
+        char *aux = malloc(total_nbytes);
+
         size_t first_nbytes = next - this->str;
-        strncpy(aux, , next - this->str);
-        
+        strncpy(aux, this->str, first_nbytes);
+
+        size_t second_nbytes = strlen(substitution);
+        strncpy(aux + first_nbytes, substitution, second_nbytes);
+
+        // size_t remaining_nbytes = total_nbytes - first_nbytes - strlen(target);
+        strncpy(aux + first_nbytes + second_nbytes, next + strlen(target), total_nbytes);
+
+        aux[total_nbytes - 1] = '\0';
 
         free(this -> str); // Make sure you don't leak memory 
         this -> str = aux;
@@ -89,17 +99,25 @@ int sstring_substitute(sstring *this, size_t offset, char *target,
 char *sstring_slice(sstring *this, int start, int end) {
     // your code goes here
 
-
-    return NULL;
+    // this->str[start .. end - 1] inclusive
+    size_t nbytes_copied = end - start;
+    char *str = malloc(nbytes_copied+ 1); // [end - statr] actual chars, 1 for '\0'
+    strncpy(str, this->str + start, nbytes_copied);
+    str[nbytes_copied] = '\0'; //zero the last byte
+    return str;
 }
 
 void sstring_destroy(sstring *this) {
     // your code goes here
+    assert(this); 
+    free(this->str); // free all of its dynamic memory
+    free(this);
 }
 
 // --------------- HELPERS --------------
-void obsolete_sstring_append(sstring *this, sstring *addition) {
+vector *obsolete_sstring_append(sstring *this, char delimiter) {
 
+    vector* v = vector_create(string_copy_constructor, string_destructor, string_default_constructor);
     int i = 0; //offset in work string
     char *walk = this->str;
     int CAPACITY = 1024;
