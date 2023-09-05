@@ -117,6 +117,12 @@ void run_test(char **arr, size_t n)
     vector_clear(v);
     printf("I expect v.size() == 0, and I obtain: %ld. Hooray!\n", vector_size(v));
     puts("*****************************\n");
+
+    // Test: destroy
+    puts("*****************************");
+    vector_destroy(v);
+    print_vector("Lets see some stats after `vector_destroy(v)`", v);
+    puts("*****************************\n");
 }
 
 int **allocate_array_intptrs(size_t n) {

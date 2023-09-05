@@ -114,7 +114,7 @@ void vector_destroy(vector *this)
 
     assert(this);
 
-    for (size_t i = 0; i < this->size; ++i)
+    for (size_t i = 0; i < this->capacity; ++i)
         this->destructor(this->array[i]); // By: calling on the `user provided destructor` for every element
 
     // and deallocates all the storage capacity allocated by the 'vector' constructor.
@@ -293,10 +293,10 @@ void vector_insert(vector *this, size_t position, void *element)
     }
 
     for (size_t i = old_size - 1; i >= position; --i) {
-        this -> array[i + 1] = this -> array[i];
+        this -> array[i + 1] = this -> copy_constructor(this -> array[i]);
+        this -> destructor (this -> array[i]);
     }
     
-    this -> destructor(this -> array[position]);
     this -> array[position] = this -> copy_constructor(element);
 }
 
