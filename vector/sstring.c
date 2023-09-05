@@ -85,8 +85,8 @@ int sstring_substitute(sstring *this, size_t offset, char *target,
         size_t second_nbytes = strlen(substitution);
         strncpy(aux + first_nbytes, substitution, second_nbytes);
 
-        // size_t remaining_nbytes = total_nbytes - first_nbytes - strlen(target);
-        strncpy(aux + first_nbytes + second_nbytes, next + strlen(target), total_nbytes);
+        size_t remaining_nbytes = total_nbytes - first_nbytes - second_nbytes;
+        strncpy(aux + first_nbytes + second_nbytes, next + strlen(target), remaining_nbytes);
 
         aux[total_nbytes - 1] = '\0';
 
