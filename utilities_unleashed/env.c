@@ -59,7 +59,7 @@ int main(int argc, char *argv[])
                 if (!strcmp(arg, "--")) // the next arg (argv[i + 1]) is the command; argv[i + i + 2 ... argc - 1] are the args of cmd.
                 {
                     if (i + 1 >= argc || (i + 1 < argc && argv[i + 1] == NULL)) // Cannot find cmd after --
-                         print_exec_failed();
+                         print_env_usage();
 
                     execvp(*(argv + i + 1), argv + i + 1);
                     print_exec_failed();
