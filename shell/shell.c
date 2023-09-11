@@ -113,11 +113,47 @@ void start_shell(int argc, char *argv[], vector *history)
         file = stdin;
 }
 
+// Remove process with PID = <pid>, by freeing it from the memory & removing it from the `processes` vector
+void remove_process(pid_t pid) {
+    size_t n = vector_size(processes);
+
+    for (size_t i = 0; i < n; ++i)
+    {
+        process *p = vector_get(processes, i);
+        if (p->pid == pid) {
+            free(p->command);
+            free(p);
+            vector_erase(processes, i);
+            break;
+        }
+    }
+}
+void handle_SIGINT()
+{
+
+    size_t n = vector_size(processes);
+    for (size_t i = 0; i < n; ++i)
+    {
+        process *p = vector_get(processes, i);
+        if (p->pid != getpgid(p->pid)) // foreground process
+        { 
+            kill(p->pid, SIGKILL);
+            remove_process(p -> pid);
+        }
+    }
+}
+
+void handle_signals()
+{
+    signal(SIGINT, handle_SIGINT);
+    //TODO: handle SIGCHILD
+}
 int shell(int argc, char *argv[])
 {
     // This is the entry point for your shell.
 
-    // TODO: handle_signals(); - SIGINT & SIGCHILD
+    // TODO: handle_signals(); - SIGINT[x] & SIGCHILD[]
+    handle_signals();
 
     processes = shallow_vector_create(); // to store info later about processes
     vector *history = string_vector_create();
