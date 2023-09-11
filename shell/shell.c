@@ -6,6 +6,9 @@
 #include "shell.h"
 #include "vector.h"
 #include <unistd.h>
+#include <sys/types.h>
+#include <signal.h>
+#include <string.h>
 
 typedef struct process
 {
@@ -19,6 +22,21 @@ static int f_flag = 0;
 static FILE *file = NULL; // Our input stream, may be `stdin` or a file if `-f` is specified
 
 static char *history_path = NULL;
+
+void killAllChildProcesses()
+{
+    size_t n = vector_size(processes);
+    for (size_t i = 0; i < n; ++i)
+    {
+        process *p = (process *)vector_get(processes, i);
+        kill(p->pid, SIGKILL);
+        // Free the memory taken by each process
+        free(p->command);
+        free(p);
+    }
+
+    vector_destroy(processes);
+}
 
 void start_shell(int argc, char *argv[], vector *history)
 {
@@ -62,14 +80,13 @@ void start_shell(int argc, char *argv[], vector *history)
         if (!history_file)
         {
             print_history_file_error();
-            exit(1);
         }
 
         char *line = NULL;
         size_t len = 0;
         ssize_t nread;
 
-        while ((nread = getline(&line, &len, history_file) != -1)) // load history
+        while ((nread = getline(&line, &len, history_file)) != -1) // load history
         {
             if (nread > 0 && line[nread - 1] == '\n')
             {
@@ -83,11 +100,12 @@ void start_shell(int argc, char *argv[], vector *history)
     }
 
     if (f_flag)
-    {                                            // Your shell should also support running a series of commands from a script f
-    // When provided -f, your shell will both print and run the commands in the file in sequential order until the end of the file
+    {
+        // When provided -f, your shell will both print and run the commands in the file in sequential order until the end of the file
         file = fopen(f_name, "r");
-        if (!file) { //non-existent script file
-            print_script_file_error(); 
+        if (!file)
+        { // non-existent script file
+            print_script_file_error();
             exit(1);
         }
     }
@@ -107,21 +125,56 @@ int shell(int argc, char *argv[])
 
     // TODO: Start shell -> while(1)
 
+    char *buffer = NULL;
+    size_t len = 0;
+    ssize_t nread;
 
-    // TODO: Upon exiting, the shell should append the commands of the current session into the supplied history file
-    if (h_flag) {
+    while ((nread = getline(&buffer, &len, file)) != -1)
+    {
+
+        char *cwd = get_full_path("./");
+        print_prompt(cwd, getpid()); // When prompting for a command, the shell will print a prompt in the following format (from format.h):
+        free(cwd);                   // Ensures any flow control gets here
+
+        // Keep track of commands in history; also - prepare buffer to print: Note the lack of a newline at the end of this prompt.
+
+        if (nread > 0 && buffer[nread - 1] == '\n')
+        {
+            buffer[nread - 1] = '\0';
+            // Your shell should also support running a series of commands from a script f
+            if (file != stdin) // As `stdin` already gets displayed to the shell session, we want to display to shell only if '-f/-h' is used to read
+                print_command(buffer);
+        }
+
+        // TODO: solve built-in commands - Run in shell (main / parent) process, don't `fork()`
+        if (!strncmp(buffer, "exit", 4))
+            break;
+        else
+        {
+            vector_push_back(history, buffer);
+        }
+    }
+
+    // TODO: [Part 2] -> KILL all child processes when: a.) `exit` (notice break on strncmp exit) OR b.) EOF
+    killAllChildProcesses();
+
+    free(buffer); // used to read each line in the shell
+
+    // Upon exiting, the shell should append the commands of the current session into the supplied history file
+    if (h_flag)
+    {
         FILE *output = fopen(history_path, "w");
         VECTOR_FOR_EACH(history, buffer, {
-            fprintf(output, "%s\n", (char *) buffer);
+            fprintf(output, "%s\n", (char *)buffer);
         });
 
-        fclose(output); 
+        fclose(output);
         free(history_path);
     }
-    
-    
-    if (f_flag)
+
+    if (f_flag) // close file
         fclose(file);
 
+    vector_destroy(history); // free vector
     return 0;
 }
