@@ -114,13 +114,15 @@ void start_shell(int argc, char *argv[], vector *history)
 }
 
 // Remove process with PID = <pid>, by freeing it from the memory & removing it from the `processes` vector
-void remove_process(pid_t pid) {
+void remove_process(pid_t pid)
+{
     size_t n = vector_size(processes);
 
     for (size_t i = 0; i < n; ++i)
     {
         process *p = vector_get(processes, i);
-        if (p->pid == pid) {
+        if (p->pid == pid)
+        {
             free(p->command);
             free(p);
             vector_erase(processes, i);
@@ -136,9 +138,9 @@ void handle_SIGINT()
     {
         process *p = vector_get(processes, i);
         if (p->pid != getpgid(p->pid)) // foreground process
-        { 
+        {
             kill(p->pid, SIGKILL);
-            remove_process(p -> pid);
+            remove_process(p->pid);
         }
     }
 }
@@ -146,13 +148,33 @@ void handle_SIGINT()
 void handle_signals()
 {
     signal(SIGINT, handle_SIGINT);
-    //TODO: handle SIGCHILD
+    // TODO: [PART 2] handle SIGCHILD
 }
+
+// Return status code of executtion of command
+int execute_command(char *buffer)
+{
+    if (!strncmp(buffer, "cd", 2))
+    {
+        char *path = buffer + 3;
+        int succesfully_chdir = chdir(path);
+        if (succesfully_chdir == -1)
+        {
+            print_no_directory(path);
+            return 1;
+        }
+        else return 0;
+    }
+    //TODO: add other functions (built-in or external)
+
+    return 0;
+}
+
 int shell(int argc, char *argv[])
 {
     // This is the entry point for your shell.
 
-    // TODO: handle_signals(); - SIGINT[x] & SIGCHILD[]
+    // Handle the relevant signals for the task
     handle_signals();
 
     processes = shallow_vector_create(); // to store info later about processes
@@ -186,8 +208,11 @@ int shell(int argc, char *argv[])
         if (!strncmp(buffer, "exit", 4))
             break;
         else
-        {
+        { // All comamds that have to prompt to the `history` IN HERE
             vector_push_back(history, buffer);
+
+            // `cd <path>`
+            execute_command(buffer); 
         }
     }
 
