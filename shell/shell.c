@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <signal.h>
 #include <string.h>
+#include <stdlib.h>
 
 typedef struct process
 {
@@ -165,9 +166,10 @@ int execute_command(char *buffer)
             print_no_directory(path);
             return 1;
         }
-        else return 0;
+        else
+            return 0;
     }
-    //TODO: add other functions
+    // TODO: add other functions
 
     return 0;
 }
@@ -209,18 +211,28 @@ int shell(int argc, char *argv[])
         // TODO: solve built-in commands - Run in shell (main / parent) process, don't `fork()`
         if (!strncmp(buffer, "exit", 4))
             break;
-        else if (buffer[0] == '!') { // !history or !prefix
-            if (!strcmp(buffer + 1, "history")) { // Print `history` vector line by line
-                size_t history_lines = vector_size(history);
-                for (size_t i = 0; i < history_lines; ++i) 
-                    print_history_line(i, (char *) vector_get(history, i));
+        else if (!strcmp(buffer, "!history"))
+        {                                                // !history
+            size_t history_lines = vector_size(history); // Print `history` vector line by line
+            for (size_t i = 0; i < history_lines; ++i)
+                print_history_line(i, (char *)vector_get(history, i));
+        }
+        else if (buffer[0] == '#') { // '#<n>
+            size_t command_line_nr = atoi(buffer + 1); // Precondition: "buffer + 1" represents a valid integer: n >= 0
+            if (command_line_nr >= vector_size(history)) { //  If `n` is not a valid index, then print the appropriate error and do not store anything in the history.
+                print_invalid_index();
             }
-
+            else {
+                char *cmd = vector_get(history, command_line_nr);
+                print_command(cmd); // :warning: Print out the command **before executing** if there is a match.
+                execute_command(cmd); // Execute the command
+                vector_push_back(history, cmd); // The command executed should be stored in the history.
+            }
         }
         else
         { // All comamds that have to prompt to the `history` IN HERE
             vector_push_back(history, buffer);
-            execute_command(buffer); 
+            execute_command(buffer);
         }
     }
 
