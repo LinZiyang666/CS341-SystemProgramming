@@ -152,8 +152,10 @@ void handle_signals()
 }
 
 // Return status code of executtion of command
+// Here come all the commands that have to log in `history`
 int execute_command(char *buffer)
 {
+    // `cd <path>`
     if (!strncmp(buffer, "cd", 2))
     {
         char *path = buffer + 3;
@@ -165,7 +167,7 @@ int execute_command(char *buffer)
         }
         else return 0;
     }
-    //TODO: add other functions (built-in or external)
+    //TODO: add other functions
 
     return 0;
 }
@@ -207,11 +209,17 @@ int shell(int argc, char *argv[])
         // TODO: solve built-in commands - Run in shell (main / parent) process, don't `fork()`
         if (!strncmp(buffer, "exit", 4))
             break;
+        else if (buffer[0] == '!') { // !history or !prefix
+            if (!strcmp(buffer + 1, "history")) { // Print `history` vector line by line
+                size_t history_lines = vector_size(history);
+                for (size_t i = 0; i < history_lines; ++i) 
+                    print_history_line(i, (char *) vector_get(history, i));
+            }
+
+        }
         else
         { // All comamds that have to prompt to the `history` IN HERE
             vector_push_back(history, buffer);
-
-            // `cd <path>`
             execute_command(buffer); 
         }
     }
