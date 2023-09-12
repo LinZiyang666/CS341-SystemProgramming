@@ -5,6 +5,7 @@
 #include "format.h"
 #include "shell.h"
 #include "vector.h"
+#include "sstring.h"
 #include <unistd.h>
 #include <sys/types.h>
 #include <signal.h>
@@ -226,6 +227,28 @@ int execute_command(char *buffer)
         }
         else if (child == 0)
         { // I am child
+
+            // Get all C-strings (char *s) to pass as arguments to `execvp(...)`
+            // char *[] to statically allocate on stack
+            sstring *cmds_sstring = cstr_to_sstring(buffer); // NOTE: don't have to free if `exec` succesfully executes, as the swapped image will clear stack/heap
+            vector *cmds_vector = sstring_split(cmds_sstring, ' ');
+            size_t cmds_len = vector_size(cmds_vector);
+            char *cmds[cmds_len + 1];
+
+            for (size_t i = 0; i < cmds_len; ++i)
+            {
+                char *cmd = vector_get(cmds_vector, i);
+                cmds[i] = cmd;
+            }
+            cmds[cmds_len] = NULL; // NULL terminate the array to prepare for `execvp`
+
+            print_command_executed(getpid());
+            int succ_exec = execvp(cmds[0], cmds);
+            if (succ_exec == -1) // exec only returns to the child process when the command fails to execute successfully
+            {
+                print_exec_failed(cmds[0]);
+                exit(1);
+            }
         }
         else
         { // I am parent
@@ -237,9 +260,8 @@ int execute_command(char *buffer)
             // TODO: [PART 2] background processes: buffer[sz - 1] == '&'
 
             // Foreground process: setpgid(child, parent)
-
             int succesfully_set_pgid = setpgid(child, getpid());
-            if (!succesfully_set_pgid)
+            if (succesfully_set_pgid == -1)
             {
                 print_setpgid_failed();
                 exit(1);
@@ -255,12 +277,13 @@ int execute_command(char *buffer)
             }
             else
             {
-                delete_process(child);
+                delete_process(child); // Destroy child process until termination of program
                 if (WIFEXITED(status) && WEXITSTATUS(status) != 0) // Child failed
                     return 1;                                      // Prepare for &&, || and ;
             }
         }
     }
+
 
     return 0;
 }
