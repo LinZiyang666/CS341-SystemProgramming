@@ -199,8 +199,14 @@ void delete_process(pid_t _pid)
 // Here come all the commands that have to log in `history`
 int execute_command(char *buffer)
 {
+    // `cd <path>` edge case: missing <path> arg
+    if (!strcmp(buffer, "cd")) // cd
+    {
+        print_no_directory("");
+        return 1;
+    }
     // `cd <path>`
-    if (!strncmp(buffer, "cd", 2))
+    else if(!strncmp(buffer, "cd ", 3))
     {
         char *path = buffer + 3;
         int succesfully_chdir = chdir(path);
