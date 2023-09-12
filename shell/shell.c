@@ -10,6 +10,7 @@
 #include <signal.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/wait.h>
 
 typedef struct process
 {
@@ -154,6 +155,45 @@ void handle_signals()
     // TODO: [PART 2] handle SIGCHILD
 }
 
+process *new_process(char *buffer, pid_t _pid)
+{
+    process *p = malloc(sizeof(process));
+    p->pid = _pid;
+    p->command = strdup(buffer); // TODO: free in destructor
+    return p;
+}
+
+// This alternative does not work, as we still have to remove the process from the `processes` vector
+// void delete_process (process **p_ptr) { // NOTE: passing the pointer by reference
+//     process *p = *p_ptr;
+//     if (p != NULL) {
+//         free(p->command);
+//         free(p);
+//         p = NULL;
+//     }
+// }
+
+void delete_process(pid_t _pid)
+{
+    size_t processes_len = vector_size(processes);
+    size_t removed_pos = -1;
+
+    for (size_t i = 0; i < processes_len; ++i)
+    {
+        process *p = vector_get(processes, i);
+        if (p->pid == _pid)
+        {
+            free(p->command);
+            free(p);
+            p = NULL;
+            removed_pos = i;
+            break;
+        }
+    }
+
+    vector_erase(processes, removed_pos);
+}
+
 // Return status code of executtion of command
 // Here come all the commands that have to log in `history`
 int execute_command(char *buffer)
@@ -171,7 +211,56 @@ int execute_command(char *buffer)
         else
             return 0;
     }
-    // TODO: add other functions
+    // For commands that are not built-in, the shell should consider the command name to be the name of a file that contains executable binary code
+    else
+    { // External commands must be executed by a new process, forked from your shell. If a command is not one of the built-in commands listed, it is an external command.
+
+        // Tip: It is good practice to flush the standard output stream before the fork to be able to correctly display the output.
+        // This will also prevent duplicate printing from the child process.
+        fflush(stdout);
+        pid_t child = fork();
+        if (child == -1)
+        {
+            print_fork_failed();
+            exit(1); // The child should exit with exit status 1 if it fails to execute a command.
+        }
+        else if (child == 0)
+        { // I am child
+        }
+        else
+        { // I am parent
+            // TODO: You are responsible of cleaning up all the child processes upon termination of your program
+
+            process *p = new_process(buffer, child);
+            vector_push_back(processes, p);
+
+            // TODO: [PART 2] background processes: buffer[sz - 1] == '&'
+
+            // Foreground process: setpgid(child, parent)
+
+            int succesfully_set_pgid = setpgid(child, getpid());
+            if (!succesfully_set_pgid)
+            {
+                print_setpgid_failed();
+                exit(1);
+            }
+
+            // The parent is still responsible for waiting on the child. Avoid creating Zombies
+            int status;
+
+            if (waitpid(child, &status, 0) == -1)
+            {
+                print_wait_failed();
+                exit(1);
+            }
+            else
+            {
+                delete_process(child);
+                if (WIFEXITED(status) && WEXITSTATUS(status) != 0) // Child failed
+                    return 1;                                      // Prepare for &&, || and ;
+            }
+        }
+    }
 
     return 0;
 }
