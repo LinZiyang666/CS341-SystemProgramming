@@ -185,7 +185,7 @@ int shell(int argc, char *argv[])
     vector *history = string_vector_create();
     start_shell(argc, argv, history);
 
-    // TODO: Start shell -> while(1)
+    // Start shell -> while(1)
 
     char *buffer = NULL;
     size_t len = 0;
@@ -208,7 +208,7 @@ int shell(int argc, char *argv[])
                 print_command(buffer);
         }
 
-        // TODO: solve built-in commands - Run in shell (main / parent) process, don't `fork()`
+        // TODO: [PART 1] solve built-in commands - Run in shell (main / parent) process, don't `fork()`
         if (!strncmp(buffer, "exit", 4))
             break;
         else if (!strcmp(buffer, "!history"))
@@ -217,17 +217,58 @@ int shell(int argc, char *argv[])
             for (size_t i = 0; i < history_lines; ++i)
                 print_history_line(i, (char *)vector_get(history, i));
         }
-        else if (buffer[0] == '#') { // '#<n>
+        else if (buffer[0] == '#')
+        {                                              // '#<n>
             size_t command_line_nr = atoi(buffer + 1); // Precondition: "buffer + 1" represents a valid integer: n >= 0
-            if (command_line_nr >= vector_size(history)) { //  If `n` is not a valid index, then print the appropriate error and do not store anything in the history.
+            if (command_line_nr >= vector_size(history))
+            { //  If `n` is not a valid index, then print the appropriate error and do not store anything in the history.
                 print_invalid_index();
             }
-            else {
+            else
+            {
                 char *cmd = vector_get(history, command_line_nr);
-                print_command(cmd); // :warning: Print out the command **before executing** if there is a match.
-                execute_command(cmd); // Execute the command
+                print_command(cmd);             // :warning: Print out the command **before executing** if there is a match.
                 vector_push_back(history, cmd); // The command executed should be stored in the history.
+                execute_command(cmd);           // Execute the command
             }
+        }
+        else if (buffer[0] == '!')
+        {
+            char *prefix = buffer + 1;
+            int last_prefix_found = false;
+            char *cmd = NULL;
+
+            if (prefix == NULL)
+            { // Print last cmd in history file, if exists
+                if (!vector_empty(history))
+                    {
+                        cmd = *vector_back(history);
+                        last_prefix_found = 1;
+                    }
+            }
+            else
+            {
+                size_t prefix_len = strlen(prefix);
+                size_t history_lines = vector_size(history);
+                for (size_t i = history_lines - 1 ; i >= 0 && !last_prefix_found; --i)
+                {
+                        char *history_line = (char *) vector_at(history, i);
+                        if (!strncmp(prefix, history_line, prefix_len)) {
+                            cmd = history_line;
+                            last_prefix_found = 1;
+                        }
+                }
+
+            }
+
+                if (!last_prefix_found)
+                    print_no_history_match();
+                else
+                {
+                    print_command(cmd);             // :warning: Print out the command **before executing** if there is a match.
+                    vector_push_back(history, cmd); // The command executed should be stored in the history.
+                    execute_command(cmd);           // Execute the command
+                }
         }
         else
         { // All comamds that have to prompt to the `history` IN HERE
