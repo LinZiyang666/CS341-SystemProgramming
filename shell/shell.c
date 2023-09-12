@@ -277,13 +277,12 @@ int execute_command(char *buffer)
             }
             else
             {
-                delete_process(child); // Destroy child process until termination of program
+                delete_process(child);                             // Destroy child process until termination of program
                 if (WIFEXITED(status) && WEXITSTATUS(status) != 0) // Child failed
                     return 1;                                      // Prepare for &&, || and ;
             }
         }
     }
-
 
     return 0;
 }
@@ -387,9 +386,64 @@ int shell(int argc, char *argv[])
             }
         }
         else
-        { // All commands that have to prompt to the `history` IN HERE
+        { // Logical Ops., `cd` OR external commands
             vector_push_back(history, buffer);
-            execute_command(buffer);
+            int logical = 0;
+
+            sstring *cmds_sstring = cstr_to_sstring(buffer);        // We'll have free it afterward
+            vector *cmds_vector = sstring_split(cmds_sstring, ' '); //
+            size_t cmds_len = vector_size(cmds_vector);
+
+            for (size_t i = 0; i < cmds_len && !logical; ++i)
+            {
+                char *cmd = vector_get(cmds_vector, i);
+                char *left;
+                char *right;
+
+                if (!strcmp(cmd, "&&"))
+                {
+                    right = strdup(buffer);
+                    char *free_ptr = right;
+                    left = strsep(&right, "&");
+                    left[strlen(left) - 1] = '\0'; // Remove trailing space
+                    right += 2;
+                    int failed_cmd1 = execute_command(left);
+                    if (!failed_cmd1)
+                        execute_command(right);
+                    free(free_ptr);
+                }
+                else if (!strcmp(cmd, "||"))
+                {
+                    right = strdup(buffer);
+                    char *free_ptr = right;
+                    left = strsep(&right, "|");
+                    left[strlen(left) - 1] = '\0'; // Remove trailing space
+                    right += 2;
+                    int failed_cmd1 = execute_command(left);
+                    if (failed_cmd1)
+                        execute_command(right);
+                    free(free_ptr);
+                }
+                else if (cmd[strlen(cmd) - 1] == ';')
+                {
+                    right = strdup(buffer);
+                    char *free_ptr = right;
+                    left = strsep(&right, ";");
+                    right += 1;
+                    execute_command(left);
+                    execute_command(right);
+                    free(free_ptr);
+                }
+
+                if (!strcmp(cmd, "&&") || !strcmp(cmd, "||") || cmd[strlen(cmd) - 1] == ';')
+                    logical = 1;
+            }
+
+            sstring_destroy(cmds_sstring);
+            vector_destroy(cmds_vector);
+
+            if (!logical)
+                execute_command(buffer);
         }
     }
 
