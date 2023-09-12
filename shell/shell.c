@@ -82,22 +82,24 @@ void start_shell(int argc, char *argv[], vector *history)
         {
             print_history_file_error();
         }
-
-        char *line = NULL;
-        size_t len = 0;
-        ssize_t nread;
-
-        while ((nread = getline(&line, &len, history_file)) != -1) // load history
+        else
         {
-            if (nread > 0 && line[nread - 1] == '\n')
-            {
-                line[nread - 1] = '\0';
-                vector_push_back(history, line);
-            }
-        }
+            char *line = NULL;
+            size_t len = 0;
+            ssize_t nread;
 
-        free(line);
-        fclose(history_file);
+            while ((nread = getline(&line, &len, history_file)) != -1) // load history
+            {
+                if (nread > 0 && line[nread - 1] == '\n')
+                {
+                    line[nread - 1] = '\0';
+                    vector_push_back(history, line);
+                }
+            }
+
+            free(line);
+            fclose(history_file);
+        }
     }
 
     if (f_flag)
@@ -234,44 +236,46 @@ int shell(int argc, char *argv[])
         }
         else if (buffer[0] == '!')
         {
+
             char *prefix = buffer + 1;
-            int last_prefix_found = false;
+            int last_prefix_found = 0;
             char *cmd = NULL;
 
-            if (prefix == NULL)
-            { // Print last cmd in history file, if exists
+            if (buffer[1] == '\0') // prefix may be empty
+            {                      // Print last cmd in history file, if exists
                 if (!vector_empty(history))
-                    {
-                        cmd = *vector_back(history);
-                        last_prefix_found = 1;
-                    }
+                {
+                    cmd = *vector_back(history);
+                    last_prefix_found = 1;
+                }
             }
+
             else
             {
                 size_t prefix_len = strlen(prefix);
                 size_t history_lines = vector_size(history);
-                for (size_t i = history_lines - 1 ; i >= 0 && !last_prefix_found; --i)
+                for (int i = history_lines - 1; i >= 0 && !last_prefix_found; i--)
                 {
-                        char *history_line = (char *) vector_at(history, i);
-                        if (!strncmp(prefix, history_line, prefix_len)) {
-                            cmd = history_line;
-                            last_prefix_found = 1;
-                        }
+                    char *history_line = (char *)vector_get(history, i);
+                    if (!strncmp(prefix, history_line, prefix_len))
+                    {
+                        cmd = history_line;
+                        last_prefix_found = 1;
+                    }
                 }
-
             }
 
-                if (!last_prefix_found)
-                    print_no_history_match();
-                else
-                {
-                    print_command(cmd);             // :warning: Print out the command **before executing** if there is a match.
-                    vector_push_back(history, cmd); // The command executed should be stored in the history.
-                    execute_command(cmd);           // Execute the command
-                }
+            if (!last_prefix_found)
+                print_no_history_match();
+            else
+            {
+                print_command(cmd);             // :warning: Print out the command **before executing** if there is a match.
+                vector_push_back(history, cmd); // The command executed should be stored in the history.
+                execute_command(cmd);           // Execute the command
+            }
         }
         else
-        { // All comamds that have to prompt to the `history` IN HERE
+        { // All commands that have to prompt to the `history` IN HERE
             vector_push_back(history, buffer);
             execute_command(buffer);
         }
