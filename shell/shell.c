@@ -328,6 +328,8 @@ int shell(int argc, char *argv[])
         }
 
         // TODO: [PART 1] solve built-in commands - Run in shell (main / parent) process, don't `fork()`
+        if (strlen(buffer) == 0) // Empty string
+            continue;
         if (!strncmp(buffer, "exit", 4))
             break;
         else if (!strcmp(buffer, "!history"))
