@@ -14,6 +14,44 @@ size_t invalid_addresses;
 // Turn off buffering for `stdout` -> done in mini_hacks.c
 //  setvbuf(stdout, NULL, _IONBF, 0);
 
+// ----- HELPER FUNCTIONS -------
+
+
+// Return the entire node, the pointer pointing at the start of metadata <=> p1 in visualisation
+meta_data *valid_ptr(meta_data *walk, meta_data *ptr)
+{
+    while (walk)
+    {
+        meta_data *memory = walk + 1;
+        if (memory == ptr)
+            return walk;
+        else
+            walk = walk->next;
+    }
+    return 0;
+}
+
+// Returns the node before `ptr` in the LL; Note that ptr is of type ptr1 from visualisation, that points to start of metadata
+meta_data *before_node(meta_data *walk, meta_data *ptr) {
+
+    meta_data *before = walk;
+    walk = walk -> next;
+
+    while (walk) {
+        if (walk == ptr)
+            return before;
+        else {
+            before = walk;
+            walk = walk -> next;
+        }
+    }
+    // should note reach this code
+    assert(1); 
+    return NULL;
+}
+
+// ----- HELPER FUNCTIONS -------
+
 void *mini_malloc(size_t request_size, const char *filename,
                   void *instruction)
 {
@@ -110,43 +148,10 @@ void *mini_realloc(void *payload, size_t request_size, const char *filename,
         before -> next = node;
     }
 
-    return node + 1;    
+    return memory;    
 }
 
-// Return the entire node, the pointer pointing at the start of metadata <=> p1 in visualisation
-meta_data *valid_ptr(meta_data *walk, meta_data *ptr)
-{
-    while (walk)
-    {
-        meta_data *memory = walk + 1;
-        if (memory == ptr)
-            return walk;
-        else
-            walk = walk->next;
-    }
-    return 0;
-}
 
-// Returns the node before `ptr` in the LL; Note that ptr is of type ptr1 from visualisation, that points to start of metadata
-meta_data *before_node(meta_data *walk, meta_data *ptr) {
-
-    meta_data *before = walk;
-    walk = walk -> next;
-
-    while (walk) {
-        if (walk == ptr)
-            return before;
-        else {
-            before = walk;
-            walk = walk -> next;
-        }
-
-    }
-
-    // should note reach this code
-    assert(1); 
-    return NULL;
-}
 
 void mini_free(void *payload)
 {
