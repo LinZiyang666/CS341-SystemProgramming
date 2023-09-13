@@ -76,6 +76,15 @@ void test_realloc_no_memleaks() {
     return ;
 }
 
+void realloc_elaborate() {
+    void *p1 = malloc(30);
+    void *p3 = malloc(50);
+    p3 = realloc(p3, 10);
+    
+    free(p1);
+    // free(p3); -> should leak 10 BYTES
+}
+
 int main(int argc, char *argv[])
 {
     // Your tests here using malloc and free
@@ -85,6 +94,7 @@ int main(int argc, char *argv[])
     // test_noleaks();
     // test_3leaks();
     // test_double_free();
+    /* test */ realloc_elaborate();
     // + test echo via CLI
 
     /* Lab4 tests*/
@@ -95,7 +105,9 @@ int main(int argc, char *argv[])
 
     // test_variety_of_issues();
 
-    test_realloc_no_memleaks();
+    // test_realloc_no_memleaks();
+
+
 
     return 0;
 }

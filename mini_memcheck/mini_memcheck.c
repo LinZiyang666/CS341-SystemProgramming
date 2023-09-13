@@ -127,7 +127,6 @@ void *mini_realloc(void *payload, size_t request_size, const char *filename,
         return NULL;
     }
 
-    meta_data *memory = node + 1;
     size_t prev_size = node ->request_size;
 
     if (prev_size < request_size)
@@ -135,20 +134,22 @@ void *mini_realloc(void *payload, size_t request_size, const char *filename,
     else
         total_memory_freed += (prev_size - request_size);
     
+    size_t actual_size = request_size + sizeof(meta_data);
     // Modify the references in the LL to the newly allocated node
     if (node == head) {
-        node = realloc(node, request_size);
+        node = realloc(node, actual_size);
         node ->request_size = request_size;
         head = node;
     }
     else {
         meta_data *before = before_node(head, node);
-        node = realloc(node, request_size);
+        node = realloc(node, actual_size);
         node -> request_size = request_size;
         before -> next = node;
     }
 
-    return memory;    
+    meta_data *new_memory = node + 1;
+    return new_memory;    
 }
 
 
