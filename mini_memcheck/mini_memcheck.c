@@ -71,9 +71,46 @@ void *mini_calloc(size_t num_elements, size_t element_size,
 
 void *mini_realloc(void *payload, size_t request_size, const char *filename,
                    void *instruction)
-{
+{ // The original memory referenced by payload should not change
+
     // your code here
-    return NULL;
+    if (payload == NULL && request_size == 0) return NULL; //UB
+    else if (payload == NULL)
+        return mini_malloc(request_size, filename, instruction);
+    else if (request_size == 0) {
+        mini_free(payload);
+        return NULL;
+    }
+
+    meta_data *node = valid_ptr(head, payload);
+
+    if (!node) { // not valid ptr
+        invalid_addresses ++;
+        return NULL;
+    }
+
+    meta_data *memory = node + 1;
+    size_t prev_size = node ->request_size;
+
+    if (prev_size < request_size)
+        total_memory_requested += (request_size - prev_size);
+    else
+        total_memory_freed += (prev_size - request_size);
+    
+    // Modify the references in the LL to the newly allocated node
+    if (node == head) {
+        node = realloc(node, request_size);
+        node ->request_size = request_size;
+        head = node;
+    }
+    else {
+        meta_data *before = before_node(head, node);
+        node = realloc(node, request_size);
+        node -> request_size = request_size;
+        before -> next = node;
+    }
+
+    return node + 1;    
 }
 
 // Return the entire node, the pointer pointing at the start of metadata <=> p1 in visualisation
@@ -95,6 +132,7 @@ meta_data *before_node(meta_data *walk, meta_data *ptr) {
 
     meta_data *before = walk;
     walk = walk -> next;
+
     while (walk) {
         if (walk == ptr)
             return before;
@@ -121,6 +159,7 @@ void mini_free(void *payload)
     if (node)
     { // also remove the metadata node from the list
 
+        // Remove the node from the 'LL' as well
         if (node == head)
         {
             head = head->next;
