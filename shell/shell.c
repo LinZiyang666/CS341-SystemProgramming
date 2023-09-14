@@ -116,6 +116,11 @@ void start_shell(int argc, char *argv[], vector *history)
     }
     else // read from `stdin`
         file = stdin;
+
+    // Print after starting the shell
+    char *cwd = get_full_path("./");
+    print_prompt(cwd, getpid()); // When prompting for a command, the shell will print a prompt in the following format (from format.h):
+    free(cwd);                   // Ensures any flow control gets here
 }
 
 // Remove process with PID = <pid>, by freeing it from the memory & removing it from the `processes` vector
@@ -206,7 +211,7 @@ int execute_command(char *buffer)
         return 1;
     }
     // `cd <path>`
-    else if(!strncmp(buffer, "cd ", 3))
+    else if (!strncmp(buffer, "cd ", 3))
     {
         char *path = buffer + 3;
         int succesfully_chdir = chdir(path);
@@ -310,12 +315,9 @@ int shell(int argc, char *argv[])
     size_t len = 0;
     ssize_t nread;
 
+
     while ((nread = getline(&buffer, &len, file)) != -1)
     {
-
-        char *cwd = get_full_path("./");
-        print_prompt(cwd, getpid()); // When prompting for a command, the shell will print a prompt in the following format (from format.h):
-        free(cwd);                   // Ensures any flow control gets here
 
         // Keep track of commands in history; also - prepare buffer to print: Note the lack of a newline at the end of this prompt.
 
@@ -453,6 +455,11 @@ int shell(int argc, char *argv[])
             if (!logical)
                 execute_command(buffer);
         }
+
+        // Print before reading a new line 
+        char *cwd = get_full_path("./");
+        print_prompt(cwd, getpid()); // When prompting for a command, the shell will print a prompt in the following format (from format.h):
+        free(cwd);                   // Ensures any flow control gets here
     }
 
     // TODO: [Part 2] -> KILL all child processes when: a.) `exit` (notice break on strncmp exit) OR b.) EOF
