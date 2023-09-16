@@ -7,6 +7,7 @@
 #include "sstring.h"
 #include "vector.h"
 #include <signal.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
@@ -146,8 +147,9 @@ void handle_SIGINT() {
   }
 }
 
-// Source - https://stackoverflow.com/questions/11322488/how-to-make-sure-that-waitpid-1-stat-wnohang-collect-all-children-process
-void wait_for_all_background_child_processes(); 
+// Source -
+// https://stackoverflow.com/questions/11322488/how-to-make-sure-that-waitpid-1-stat-wnohang-collect-all-children-process
+void wait_for_all_background_child_processes();
 
 void handle_signals() {
   signal(SIGINT, handle_SIGINT);
@@ -189,12 +191,11 @@ void delete_process(pid_t _pid) {
   vector_erase(processes, removed_pos);
 }
 
-
 void wait_for_all_background_child_processes() {
   int status;
   pid_t pid;
   while ((pid = waitpid(-1, &status, WNOHANG)) > 0)
-        delete_process(pid);
+    delete_process(pid);
 }
 
 // Return status code of executtion of command
@@ -247,9 +248,10 @@ int execute_command(char *buffer) {
         cmds[i] = cmd;
       }
       if (cmds_len > 0 && !strcmp(cmds[cmds_len - 1], "&")) // background cmd
-          cmds[cmds_len - 1] = NULL;
+        cmds[cmds_len - 1] = NULL;
       else
-        cmds[cmds_len] = NULL; // NULL terminate the array to prepare for `execvp`
+        cmds[cmds_len] =
+            NULL; // NULL terminate the array to prepare for `execvp`
 
       print_command_executed(getpid());
       int succ_exec = execvp(cmds[0], cmds);
@@ -266,18 +268,19 @@ int execute_command(char *buffer) {
       process *p = new_process(buffer, child);
       vector_push_back(processes, p);
 
-
       size_t buffer_len = strlen(buffer);
-      if (buffer_len > 0 && buffer[buffer_len - 1] == '&') { // Background process
+      if (buffer_len > 0 &&
+          buffer[buffer_len - 1] == '&') { // Background process
         int succesfully_set_pgid = setpgid(child, child);
         if (succesfully_set_pgid == -1) {
           print_setpgid_failed();
           exit(1);
         }
-                // Don't block (as we would have done in Foreground processe) -> "the shell should be ready to take the next command before the given command has finished running"
-                // All the children will be waited when SIGCHLD
-      }
-      else {
+        // Don't block (as we would have done in Foreground processe) -> "the
+        // shell should be ready to take the next command before the given
+        // command has finished running" All the children will be waited when
+        // SIGCHLD
+      } else {
         // Foreground process: setpgid(child, parent)
         int succesfully_set_pgid = setpgid(child, getpid());
         if (succesfully_set_pgid == -1) {
@@ -303,6 +306,88 @@ int execute_command(char *buffer) {
   }
 
   return 0;
+}
+
+void free_process(process *p) {
+  free(p->command);
+  free(p);
+  p = NULL;
+}
+
+void destroy_proc_info(process_info *p_info) {
+  free(p_info->start_str);
+  free(p_info->time_str);
+  free(p_info->command);
+  free(p_info);
+  p_info = NULL;
+}
+
+// Source: How to extract info from /proc in Linux C:
+// https://stackoverflow.com/questions/33266678/how-to-extract-information-from-the-content-of-proc-files-on-linux-using-c
+//
+// long int process_proc_file() {
+//
+// }
+
+// Create a process_info* entry from a process*, by making use of /proc
+process_info *build_proc_info(process *p) {
+
+  int pid;
+  long int nthreads; 
+  unsigned long int vsize; 
+  char state;
+  char *start_str;
+  char *time_str;
+  char *command;
+
+
+  process_info *p_info = malloc(sizeof(process_info));
+
+  char filename[1000];
+  sprintf(filename, "/proc/%d/stat", getpid());
+  FILE *f = fopen(filename, "r");
+  fscanf(f, "%d %ld %lu ", ...)
+
+
+  // ...
+
+  flcose(f);
+  // process_proc_file();
+  // p_info->pid = getpid();
+  // p_info->nthreads = get_nthreads(p);
+  // p_info->visze = get_vsize(p);
+  // p_info->state = get_state(p);
+  // p_info->start_str = get_start_str(p);
+  // p_info->time_str = get_time_str(p);
+  // p_info->command = get_command(p);
+  // fclose(f);
+  return p_info;
+}
+
+//
+// Entire logic of when `ps` built-in is called
+void execute_ps() { // Make use of `processes` process* vector to extract each
+                    // process*, and then compute its process info from its
+                    // associated process* entry
+  print_process_info_header();
+  size_t processes_len = vector_size(processes);
+
+  for (size_t i = 0; i < processes_len; ++i) {
+    process *p = (process *)vector_get(processes, i);
+    process_info *p_info = build_proc_info(p);
+    print_process_info(p_info);
+    destroy_proc_info(p_info);
+  }
+
+  //  For the main shell process only, you do not need to include the
+  //  command-line flags
+  process *main_p = new_process(
+      "./shell", getpid()); // TODO: free it, without removing from vector
+  process_info *p_info = build_proc_info(main_p);
+  print_process_info(p_info);
+  destroy_proc_info(p_info);
+
+  free_process(main_p);
 }
 
 int shell(int argc, char *argv[]) {
@@ -404,6 +489,10 @@ int shell(int argc, char *argv[]) {
             cmd); // The command executed should be stored in the history.
         execute_command(cmd); // Execute the command
       }
+    } // TODO: built-in PART2
+    else if (!strcmp(buffer,
+                     "ps")) { //`ps` is a built-in command for your shell
+      execute_ps();
     } else { // Logical Ops., `cd` OR external commands
       vector_push_back(history, buffer);
       int logical = 0;
