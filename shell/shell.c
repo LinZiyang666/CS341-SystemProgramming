@@ -13,6 +13,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <assert.h>
 
 typedef struct process {
   char *command;
@@ -332,35 +333,46 @@ void destroy_proc_info(process_info *p_info) {
 // Create a process_info* entry from a process*, by making use of /proc
 process_info *build_proc_info(process *p) {
 
-  int pid;
-  long int nthreads; 
-  unsigned long int vsize; 
-  char state;
-  char *start_str;
-  char *time_str;
-  char *command;
-
-
   process_info *p_info = malloc(sizeof(process_info));
 
   char filename[1000];
-  sprintf(filename, "/proc/%d/stat", getpid());
+  sprintf(filename, "/proc/%d/stat", p->pid);
   FILE *f = fopen(filename, "r");
-  fscanf(f, "%d %ld %lu ", ...)
+  if (!f) {
+    print_script_file_error();
+    exit(1);
+  }
+  char buffer[1000];
+  memset(buffer, 0, sizeof(buffer));
+  fgets(buffer, 1000, f);
+  sstring *buffer_sstr = cstr_to_sstring(buffer);
+  vector *stat_fields = sstring_split(buffer_sstr, ' ');
+  
+  p_info->pid = p->pid;
+  int expected_pid = atoi((char *) vector_get(stat_fields, 0));
+  assert(p_info -> pid == expected_pid);
 
+  char *expected_nthreads_str = vector_get(stat_fields, 18);
+  p_info->nthreads = atol(expected_nthreads_str);
+  p_info -> vsize = (unsigned long) atol(vector_get(stat_fields, 22));
+  char *expected_state_str = (char *)vector_get(stat_fields, 2);
+  p_info -> state = (char) (expected_state_str[0]);
+  p_info -> start_str = malloc(sizeof(long)); //long takes at most 8 bytes
+  long expected_start_str_time = atol((char *)vector_get(stat_fields, 21)) / sysconf(_SC_CLK_TCK);
+  sprintf(p_info -> start_str, "%ld", expected_start_str_time);
+  
+  // As mentioned in the man pages of proc/procfs -> divide by sysconf(_SC_CLK_TCK) to get time measured in clock ticks
+  long utime = atol((char *)vector_get(stat_fields, 13)) / sysconf(_SC_CLK_TCK);
+  long stime = atol((char *)vector_get(stat_fields, 14)) / sysconf(_SC_CLK_TCK);
 
-  // ...
+  p_info -> time_str = malloc(sizeof(long)); // long takes at most 8 bytes
+  sprintf(p_info -> time_str, "%ld", utime + stime);
 
-  flcose(f);
-  // process_proc_file();
-  // p_info->pid = getpid();
-  // p_info->nthreads = get_nthreads(p);
-  // p_info->visze = get_vsize(p);
-  // p_info->state = get_state(p);
-  // p_info->start_str = get_start_str(p);
-  // p_info->time_str = get_time_str(p);
-  // p_info->command = get_command(p);
-  // fclose(f);
+  p_info -> command = strdup(p->command);
+         
+  sstring_destroy(buffer_sstr);
+  vector_destroy(stat_fields);
+  fclose(f);
   return p_info;
 }
 
