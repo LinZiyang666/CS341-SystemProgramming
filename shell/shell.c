@@ -146,11 +146,12 @@ void handle_SIGINT() {
   }
 }
 
+// Source - https://stackoverflow.com/questions/11322488/how-to-make-sure-that-waitpid-1-stat-wnohang-collect-all-children-process
 void wait_for_all_background_child_processes(); 
 
 void handle_signals() {
   signal(SIGINT, handle_SIGINT);
-  signal(SIGCHLD, wait_for_all_background_child_processes);
+  // signal(SIGCHLD, wait_for_all_background_child_processes);
 }
 
 process *new_process(char *buffer, pid_t _pid) {
@@ -459,6 +460,7 @@ int shell(int argc, char *argv[]) {
         execute_command(buffer);
     }
     print_full_path();
+    wait_for_all_background_child_processes();
   }
 
   // TODO: [Part 2] -> KILL all child processes when: a.) `exit` (notice break
