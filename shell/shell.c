@@ -370,7 +370,6 @@ process_info *build_proc_info(process *p) {
   long utime = atol((char *)vector_get(stat_fields, 13)) / sysconf(_SC_CLK_TCK);
   long stime = atol((char *)vector_get(stat_fields, 14)) / sysconf(_SC_CLK_TCK);
 
-  p_info -> time_str = malloc(sizeof(long)); // long takes at most 8 bytes
   char cpu_str[100];
   int nbytes_cpu = execution_time_to_string(cpu_str, 100, (utime + stime) / 60, (utime + stime) % 60);
 
