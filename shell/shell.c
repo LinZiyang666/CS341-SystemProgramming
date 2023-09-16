@@ -352,21 +352,32 @@ process_info *build_proc_info(process *p) {
   int expected_pid = atoi((char *) vector_get(stat_fields, 0));
   assert(p_info -> pid == expected_pid);
 
-  char *expected_nthreads_str = vector_get(stat_fields, 18);
+  char *expected_nthreads_str = vector_get(stat_fields, 19);
   p_info->nthreads = atol(expected_nthreads_str);
   p_info -> vsize = (unsigned long) atol(vector_get(stat_fields, 22));
   char *expected_state_str = (char *)vector_get(stat_fields, 2);
   p_info -> state = (char) (expected_state_str[0]);
-  p_info -> start_str = malloc(sizeof(long)); //long takes at most 8 bytes
-  long expected_start_str_time = atol((char *)vector_get(stat_fields, 21)) / sysconf(_SC_CLK_TCK);
-  sprintf(p_info -> start_str, "%ld", expected_start_str_time);
+
+  p_info -> start_str = malloc(100); // long takes at most 8 bytes
+  time_t total_seconds_start = atol((char *)vector_get(stat_fields, 21)) / sysconf(_SC_CLK_TCK);
+  struct tm* local_time = localtime(&total_seconds_start);
+
+  size_t nbytes_start_str = time_struct_to_string(p_info->start_str, 100, local_time);
+  if (nbytes_start_str >= 100)
+    exit(1);
   
-  // As mentioned in the man pages of proc/procfs -> divide by sysconf(_SC_CLK_TCK) to get time measured in clock ticks
+  // As mentioned in the man pages of proc/procfs -> divide by sysconf(_SC_CLK_TCK) to get time measured in seconds
   long utime = atol((char *)vector_get(stat_fields, 13)) / sysconf(_SC_CLK_TCK);
   long stime = atol((char *)vector_get(stat_fields, 14)) / sysconf(_SC_CLK_TCK);
 
   p_info -> time_str = malloc(sizeof(long)); // long takes at most 8 bytes
-  sprintf(p_info -> time_str, "%ld", utime + stime);
+  char cpu_str[100];
+  int nbytes_cpu = execution_time_to_string(cpu_str, 100, (utime + stime) / 60, (utime + stime) % 60);
+
+  if (nbytes_cpu >= 100) 
+    exit(1);
+
+  p_info->time_str = strdup(cpu_str);
 
   p_info -> command = strdup(p->command);
          
