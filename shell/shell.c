@@ -228,14 +228,16 @@ void solve_redirection(char *buffer, char *cmd)
 
   char *actual_cmd = NULL;
   char *filename = NULL;
+  char *ptr = NULL;
   FILE *f = NULL;
 
   if (!strcmp(cmd, ">"))
   {
     filename = strdup(buffer);
+    ptr = filename;
     actual_cmd = strsep(&filename, ">");
     actual_cmd[strlen(actual_cmd) - 1] = '\0'; // remove space
-    filename += 2;
+    filename += 1;
     f = fopen(filename, "w");
     if (!f)
     {
@@ -250,6 +252,7 @@ void solve_redirection(char *buffer, char *cmd)
   else if (!strcmp(cmd, ">>"))
   {
     filename = strdup(buffer);
+    ptr = filename;
     actual_cmd = strsep(&filename, ">");
     actual_cmd[strlen(actual_cmd) - 1] = '\0'; // remove space
     filename += 2;
@@ -267,9 +270,10 @@ void solve_redirection(char *buffer, char *cmd)
   else /* if (!strcmp(cmd, "<")) */
   {
     filename = strdup(buffer);
+    ptr = filename;
     actual_cmd = strsep(&filename, "<");
     actual_cmd[strlen(actual_cmd) - 1] = '\0'; // remove space
-    filename += 2;
+    filename += 1;
     f = fopen(filename, "r");
     if (!f)
     {
@@ -283,7 +287,7 @@ void solve_redirection(char *buffer, char *cmd)
   }
 
   fclose(f);
-  free(filename);
+  free(ptr);
 }
 
 // Return status code of executtion of command
@@ -351,7 +355,7 @@ int execute_command(char *buffer)
         if (!strcmp(cmd, ">>") || !strcmp(cmd, ">") || !strcmp(cmd, "<"))
         {
           is_redirection = 1;
-          redirect_cmd = cmd;
+          redirect_cmd = strdup(cmd);
         }
 
         if (!is_redirection)
@@ -364,11 +368,15 @@ int execute_command(char *buffer)
         cmds[cmds_len] =
             NULL; // NULL terminate the array to prepare for `execvp`
 
-      if (is_redirection)
+      if (is_redirection) {
         solve_redirection(buffer, redirect_cmd);
+        free(redirect_cmd);
+      }
 
       print_command_executed(getpid());
-      int succ_exec = execvp(cmds[0], cmds + tokens_until_redirect_symbol);
+      cmds[tokens_until_redirect_symbol] = NULL; // Use only the commands: cmds[0], cmds[1], ..., cmds[tokens - 1]
+    
+      int succ_exec = execvp(cmds[0], cmds);
       if (succ_exec == -1) // exec only returns to the child process when the
                            // command fails to execute successfully
       {
