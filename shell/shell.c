@@ -218,9 +218,72 @@ void delete_process(pid_t _pid)
 void wait_for_all_background_child_processes()
 {
   pid_t pid;
-  while ((pid = waitpid(-1, 0, WNOHANG)) > 0){ 
-     
+  while ((pid = waitpid(-1, 0, WNOHANG)) > 0)
+  {
   };
+}
+
+void solve_redirection(char *buffer, char *cmd)
+{
+
+  char *actual_cmd = NULL;
+  char *filename = NULL;
+  FILE *f = NULL;
+
+  if (!strcmp(cmd, ">"))
+  {
+    filename = strdup(buffer);
+    actual_cmd = strsep(&filename, ">");
+    actual_cmd[strlen(actual_cmd) - 1] = '\0'; // remove space
+    filename += 2;
+    f = fopen(filename, "w");
+    if (!f)
+    {
+      print_redirection_file_error();
+    }
+    else
+    {
+      dup2(fileno(f), 1);
+      // execute_command(actual_cmd);
+    }
+  }
+  else if (!strcmp(cmd, ">>"))
+  {
+    filename = strdup(buffer);
+    actual_cmd = strsep(&filename, ">");
+    actual_cmd[strlen(actual_cmd) - 1] = '\0'; // remove space
+    filename += 2;
+    f = fopen(filename, "a");
+    if (!f)
+    {
+      print_redirection_file_error();
+    }
+    else
+    {
+      dup2(fileno(f), 1);
+      // execute_command(actual_cmd);
+    }
+  }
+  else /* if (!strcmp(cmd, "<")) */
+  {
+    filename = strdup(buffer);
+    actual_cmd = strsep(&filename, "<");
+    actual_cmd[strlen(actual_cmd) - 1] = '\0'; // remove space
+    filename += 2;
+    f = fopen(filename, "r");
+    if (!f)
+    {
+      print_redirection_file_error();
+    }
+    else
+    {
+      dup2(fileno(f), 0);
+      // execute_command(actual_cmd);
+    }
+  }
+
+  fclose(f);
+  free(filename);
 }
 
 // Return status code of executtion of command
@@ -267,6 +330,10 @@ int execute_command(char *buffer)
     else if (child == 0)
     { // I am child
 
+      int is_redirection = 0;
+      char *redirect_cmd = NULL;
+      int tokens_until_redirect_symbol = 0; // Remains 0 if !is_redirection
+
       // Get all C-strings (char *s) to pass as arguments to `execvp(...)`
       // char *[] to statically allocate on stack
       sstring *cmds_sstring = cstr_to_sstring(
@@ -280,15 +347,28 @@ int execute_command(char *buffer)
       {
         char *cmd = vector_get(cmds_vector, i);
         cmds[i] = cmd;
+
+        if (!strcmp(cmd, ">>") || !strcmp(cmd, ">") || !strcmp(cmd, "<"))
+        {
+          is_redirection = 1;
+          redirect_cmd = cmd;
+        }
+
+        if (!is_redirection)
+          tokens_until_redirect_symbol++;
       }
+
       if (cmds_len > 0 && !strcmp(cmds[cmds_len - 1], "&")) // background cmd
         cmds[cmds_len - 1] = NULL;
       else
         cmds[cmds_len] =
             NULL; // NULL terminate the array to prepare for `execvp`
 
+      if (is_redirection)
+        solve_redirection(buffer, redirect_cmd);
+
       print_command_executed(getpid());
-      int succ_exec = execvp(cmds[0], cmds);
+      int succ_exec = execvp(cmds[0], cmds + tokens_until_redirect_symbol);
       if (succ_exec == -1) // exec only returns to the child process when the
                            // command fails to execute successfully
       {
@@ -346,7 +426,6 @@ int execute_command(char *buffer)
             return 1;                                        // Prepare for &&, || and ;
         }
       }
-      
     }
   }
 
@@ -463,12 +542,13 @@ void execute_ps()
   free_process(main_p);
 }
 
-
-process *get_process_by_pid(pid_t pid) {
+process *get_process_by_pid(pid_t pid)
+{
   size_t processes_len = vector_size(processes);
-  for (size_t i = 0; i < processes_len; ++i) {
-    process *p = (process *) vector_get(processes,i);
-    if (p -> pid == pid) 
+  for (size_t i = 0; i < processes_len; ++i)
+  {
+    process *p = (process *)vector_get(processes, i);
+    if (p->pid == pid)
       return p;
   }
 
@@ -596,24 +676,27 @@ int shell(int argc, char *argv[])
     { //`ps` is a built-in command for your shell
       execute_ps();
     }
-    else if (!strncmp(buffer, "kill", 4)) {
+    else if (!strncmp(buffer, "kill", 4))
+    {
       if (strlen(buffer) == 4) // kill was run without a pid
         print_invalid_command(buffer);
-      else 
+      else
       {
         pid_t pid;
         sscanf(buffer + 4, "%d", &pid);
         process *p = get_process_by_pid(pid);
-        if (!p) 
+        if (!p)
           print_no_process_found(pid);
-        else {
+        else
+        {
           kill(pid, SIGKILL); // Kill the process
-          print_killed_process(p ->pid, p->command);
+          print_killed_process(p->pid, p->command);
           remove_process(pid); // Remove process from vector & memory (free it)
         }
       }
     }
-    else if (!strncmp(buffer, "stop", 4)) {
+    else if (!strncmp(buffer, "stop", 4))
+    {
       if (strlen(buffer) == 4) // stop was run without a pid
         print_invalid_command(buffer);
       else
@@ -621,15 +704,17 @@ int shell(int argc, char *argv[])
         pid_t pid;
         sscanf(buffer + 4, "%d", &pid);
         process *p = get_process_by_pid(pid);
-        if (!p) 
+        if (!p)
           print_no_process_found(pid);
-        else {
+        else
+        {
           kill(pid, SIGSTOP); // Kill the process
-          print_stopped_process(p ->pid, p->command);
+          print_stopped_process(p->pid, p->command);
         }
       }
     }
-    else if (!strncmp(buffer, "cont", 4)) {
+    else if (!strncmp(buffer, "cont", 4))
+    {
       if (strlen(buffer) == 4) // cont was run without a pid
         print_invalid_command(buffer);
       else
@@ -637,14 +722,14 @@ int shell(int argc, char *argv[])
         pid_t pid;
         sscanf(buffer + 4, "%d", &pid);
         process *p = get_process_by_pid(pid);
-        if (!p) 
+        if (!p)
           print_no_process_found(pid);
-        else {
+        else
+        {
           kill(pid, SIGCONT); // Kill the process
-          print_continued_process(p -> pid, p -> command);
+          print_continued_process(p->pid, p->command);
         }
       }
-
     }
     else
     { // Logical Ops., `cd` OR external commands
@@ -695,10 +780,10 @@ int shell(int argc, char *argv[])
           execute_command(left);
           execute_command(right);
           free(free_ptr);
-        }
+        } // Redirection functionality
 
         if (!strcmp(cmd, "&&") || !strcmp(cmd, "||") ||
-            cmd[strlen(cmd) - 1] == ';')
+            cmd[strlen(cmd) - 1] == ';') // Mark logical op
           logical = 1;
       }
 
