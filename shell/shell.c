@@ -613,6 +613,39 @@ int shell(int argc, char *argv[])
         }
       }
     }
+    else if (!strncmp(buffer, "stop", 4)) {
+      if (strlen(buffer) == 4) // stop was run without a pid
+        print_invalid_command(buffer);
+      else
+      {
+        pid_t pid;
+        sscanf(buffer + 4, "%d", &pid);
+        process *p = get_process_by_pid(pid);
+        if (!p) 
+          print_no_process_found(pid);
+        else {
+          kill(pid, SIGSTOP); // Kill the process
+          print_stopped_process(p ->pid, p->command);
+        }
+      }
+    }
+    else if (!strncmp(buffer, "cont", 4)) {
+      if (strlen(buffer) == 4) // cont was run without a pid
+        print_invalid_command(buffer);
+      else
+      {
+        pid_t pid;
+        sscanf(buffer + 4, "%d", &pid);
+        process *p = get_process_by_pid(pid);
+        if (!p) 
+          print_no_process_found(pid);
+        else {
+          kill(pid, SIGCONT); // Kill the process
+          print_continued_process(p -> pid, p -> command);
+        }
+      }
+
+    }
     else
     { // Logical Ops., `cd` OR external commands
       vector_push_back(history, buffer);
