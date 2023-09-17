@@ -15,7 +15,8 @@
 #include <unistd.h>
 #include <assert.h>
 
-typedef struct process {
+typedef struct process
+{
   char *command;
   pid_t pid;
 } process;
@@ -28,7 +29,8 @@ static FILE *file =
 
 static char *history_path = NULL;
 
-void print_full_path() {
+void print_full_path()
+{
   // Print before reading a new line
   char *cwd = get_full_path("./");
   print_prompt(cwd,
@@ -37,9 +39,11 @@ void print_full_path() {
   free(cwd);              // Ensures any flow control gets here
 }
 
-void killAllChildProcesses() {
+void killAllChildProcesses()
+{
   size_t n = vector_size(processes);
-  for (size_t i = 0; i < n; ++i) {
+  for (size_t i = 0; i < n; ++i)
+  {
     process *p = (process *)vector_get(processes, i);
     kill(p->pid, SIGKILL);
     // Free the memory taken by each process
@@ -50,15 +54,18 @@ void killAllChildProcesses() {
   vector_destroy(processes);
 }
 
-void start_shell(int argc, char *argv[], vector *history) {
+void start_shell(int argc, char *argv[], vector *history)
+{
 
   int expected_argc = 1; // program name
   int opt = 0;
   char *h_name = NULL;
   char *f_name = NULL;
 
-  while ((opt = getopt(argc, argv, "h:f:")) != -1) {
-    switch (opt) {
+  while ((opt = getopt(argc, argv, "h:f:")) != -1)
+  {
+    switch (opt)
+    {
     case 'h':
       h_flag = 1;
       h_name = optarg;
@@ -74,28 +81,34 @@ void start_shell(int argc, char *argv[], vector *history) {
     }
   }
 
-  if (argc != expected_argc) {
+  if (argc != expected_argc)
+  {
     print_usage();
     exit(1);
   }
 
-  if (h_flag) { // When provided `-h`, the shell should load in the history file
-                // as its history.
+  if (h_flag)
+  { // When provided `-h`, the shell should load in the history file
+    // as its history.
     FILE *history_file;
 
     history_path =
-        get_full_path(h_name); // TODO: free it (when writing back to history)
+        get_full_path(h_name);               // TODO: free it (when writing back to history)
     history_file = fopen(history_path, "r"); // TODO: check for failure
-    if (!history_file) {
+    if (!history_file)
+    {
       print_history_file_error();
-    } else {
+    }
+    else
+    {
       char *line = NULL;
       size_t len = 0;
       ssize_t nread;
 
       while ((nread = getline(&line, &len, history_file)) != -1) // load history
       {
-        if (nread > 0 && line[nread - 1] == '\n') {
+        if (nread > 0 && line[nread - 1] == '\n')
+        {
           line[nread - 1] = '\0';
           vector_push_back(history, line);
         }
@@ -106,15 +119,18 @@ void start_shell(int argc, char *argv[], vector *history) {
     }
   }
 
-  if (f_flag) {
+  if (f_flag)
+  {
     // When provided -f, your shell will both print and run the commands in the
     // file in sequential order until the end of the file
     file = fopen(f_name, "r");
-    if (!file) { // non-existent script file
+    if (!file)
+    { // non-existent script file
       print_script_file_error();
       exit(1);
     }
-  } else // read from `stdin`
+  }
+  else // read from `stdin`
     file = stdin;
 
   print_full_path();
@@ -122,12 +138,13 @@ void start_shell(int argc, char *argv[], vector *history) {
 
 // Remove process with PID = <pid>, by freeing it from the memory & removing it
 // from the `processes` vector
-void remove_process(pid_t pid) {
-  size_t n = vector_size(processes);
-
-  for (size_t i = 0; i < n; ++i) {
+void remove_process(pid_t pid)
+{
+  for (size_t i = 0; i < vector_size(processes); ++i)
+  {
     process *p = vector_get(processes, i);
-    if (p->pid == pid) {
+    if (p->pid == pid)
+    {
       free(p->command);
       free(p);
       vector_erase(processes, i);
@@ -135,10 +152,12 @@ void remove_process(pid_t pid) {
     }
   }
 }
-void handle_SIGINT() {
+void handle_SIGINT()
+{
 
   size_t n = vector_size(processes);
-  for (size_t i = 0; i < n; ++i) {
+  for (size_t i = 0; i < n; ++i)
+  {
     process *p = vector_get(processes, i);
     if (p->pid != getpgid(p->pid)) // foreground process
     {
@@ -152,12 +171,14 @@ void handle_SIGINT() {
 // https://stackoverflow.com/questions/11322488/how-to-make-sure-that-waitpid-1-stat-wnohang-collect-all-children-process
 void wait_for_all_background_child_processes();
 
-void handle_signals() {
+void handle_signals()
+{
   signal(SIGINT, handle_SIGINT);
-  // signal(SIGCHLD, wait_for_all_background_child_processes);
+  signal(SIGCHLD, wait_for_all_background_child_processes);
 }
 
-process *new_process(char *buffer, pid_t _pid) {
+process *new_process(char *buffer, pid_t _pid)
+{
   process *p = malloc(sizeof(process));
   p->pid = _pid;
   p->command = strdup(buffer); // TODO: free in destructor
@@ -175,13 +196,15 @@ process *new_process(char *buffer, pid_t _pid) {
 //     }
 // }
 
-void delete_process(pid_t _pid) {
-  size_t processes_len = vector_size(processes);
+void delete_process(pid_t _pid)
+{
   size_t removed_pos = -1;
 
-  for (size_t i = 0; i < processes_len; ++i) {
+  for (size_t i = 0; i < vector_size(processes); ++i)
+  {
     process *p = vector_get(processes, i);
-    if (p->pid == _pid) {
+    if (p->pid == _pid)
+    {
       free(p->command);
       free(p);
       p = NULL;
@@ -192,16 +215,18 @@ void delete_process(pid_t _pid) {
   vector_erase(processes, removed_pos);
 }
 
-void wait_for_all_background_child_processes() {
-  int status;
+void wait_for_all_background_child_processes()
+{
   pid_t pid;
-  while ((pid = waitpid(-1, &status, WNOHANG)) > 0)
-    delete_process(pid);
+  while ((pid = waitpid(-1, 0, WNOHANG)) > 0){ 
+     
+  };
 }
 
 // Return status code of executtion of command
 // Here come all the commands that have to log in `history`
-int execute_command(char *buffer) {
+int execute_command(char *buffer)
+{
   // `cd <path>` edge case: missing <path> arg
   if (!strcmp(buffer, "cd")) // cd
   {
@@ -209,31 +234,38 @@ int execute_command(char *buffer) {
     return 1;
   }
   // `cd <path>`
-  else if (!strncmp(buffer, "cd ", 3)) {
+  else if (!strncmp(buffer, "cd ", 3))
+  {
     char *path = buffer + 3;
     int succesfully_chdir = chdir(path);
-    if (succesfully_chdir == -1) {
+    if (succesfully_chdir == -1)
+    {
       print_no_directory(path);
       return 1;
-    } else
+    }
+    else
       return 0;
   }
   // For commands that are not built-in, the shell should consider the command
   // name to be the name of a file that contains executable binary code
-  else { // External commands must be executed by a new process, forked from
-         // your shell. If a command is not one of the built-in commands listed,
-         // it is an external command.
+  else
+  { // External commands must be executed by a new process, forked from
+    // your shell. If a command is not one of the built-in commands listed,
+    // it is an external command.
 
     // Tip: It is good practice to flush the standard output stream before the
     // fork to be able to correctly display the output. This will also prevent
     // duplicate printing from the child process.
     fflush(stdout);
     pid_t child = fork();
-    if (child == -1) {
+    if (child == -1)
+    {
       print_fork_failed();
       exit(1); // The child should exit with exit status 1 if it fails to
                // execute a command.
-    } else if (child == 0) { // I am child
+    }
+    else if (child == 0)
+    { // I am child
 
       // Get all C-strings (char *s) to pass as arguments to `execvp(...)`
       // char *[] to statically allocate on stack
@@ -244,7 +276,8 @@ int execute_command(char *buffer) {
       size_t cmds_len = vector_size(cmds_vector);
       char *cmds[cmds_len + 1];
 
-      for (size_t i = 0; i < cmds_len; ++i) {
+      for (size_t i = 0; i < cmds_len; ++i)
+      {
         char *cmd = vector_get(cmds_vector, i);
         cmds[i] = cmd;
       }
@@ -262,7 +295,9 @@ int execute_command(char *buffer) {
         print_exec_failed(cmds[0]);
         exit(1);
       }
-    } else { // I am parent
+    }
+    else
+    { // I am parent
       // TODO: You are responsible of cleaning up all the child processes upon
       // termination of your program
 
@@ -271,9 +306,11 @@ int execute_command(char *buffer) {
 
       size_t buffer_len = strlen(buffer);
       if (buffer_len > 0 &&
-          buffer[buffer_len - 1] == '&') { // Background process
+          buffer[buffer_len - 1] == '&')
+      { // Background process
         int succesfully_set_pgid = setpgid(child, child);
-        if (succesfully_set_pgid == -1) {
+        if (succesfully_set_pgid == -1)
+        {
           print_setpgid_failed();
           exit(1);
         }
@@ -281,10 +318,13 @@ int execute_command(char *buffer) {
         // shell should be ready to take the next command before the given
         // command has finished running" All the children will be waited when
         // SIGCHLD
-      } else {
+      }
+      else
+      {
         // Foreground process: setpgid(child, parent)
         int succesfully_set_pgid = setpgid(child, getpid());
-        if (succesfully_set_pgid == -1) {
+        if (succesfully_set_pgid == -1)
+        {
           print_setpgid_failed();
           exit(1);
         }
@@ -293,29 +333,35 @@ int execute_command(char *buffer) {
         // creating Zombies
         int status;
 
-        if (waitpid(child, &status, 0) == -1) {
+        if (waitpid(child, &status, 0) == -1)
+        {
           print_wait_failed();
           exit(1);
-        } else {
+        }
+        else
+        {
           delete_process(
-              child); // Destroy child process until termination of program
+              child);                                        // Destroy child process until termination of program
           if (WIFEXITED(status) && WEXITSTATUS(status) != 0) // Child failed
-            return 1; // Prepare for &&, || and ;
+            return 1;                                        // Prepare for &&, || and ;
         }
       }
+      
     }
   }
 
   return 0;
 }
 
-void free_process(process *p) {
+void free_process(process *p)
+{
   free(p->command);
   free(p);
   p = NULL;
 }
 
-void destroy_proc_info(process_info *p_info) {
+void destroy_proc_info(process_info *p_info)
+{
   free(p_info->start_str);
   free(p_info->time_str);
   free(p_info->command);
@@ -331,14 +377,16 @@ void destroy_proc_info(process_info *p_info) {
 // }
 
 // Create a process_info* entry from a process*, by making use of /proc
-process_info *build_proc_info(process *p) {
+process_info *build_proc_info(process *p)
+{
 
   process_info *p_info = malloc(sizeof(process_info));
 
   char filename[1000];
   sprintf(filename, "/proc/%d/stat", p->pid);
   FILE *f = fopen(filename, "r");
-  if (!f) {
+  if (!f)
+  {
     print_script_file_error();
     exit(1);
   }
@@ -347,25 +395,25 @@ process_info *build_proc_info(process *p) {
   fgets(buffer, 1000, f);
   sstring *buffer_sstr = cstr_to_sstring(buffer);
   vector *stat_fields = sstring_split(buffer_sstr, ' ');
-  
+
   p_info->pid = p->pid;
-  int expected_pid = atoi((char *) vector_get(stat_fields, 0));
-  assert(p_info -> pid == expected_pid);
+  int expected_pid = atoi((char *)vector_get(stat_fields, 0));
+  assert(p_info->pid == expected_pid);
 
   char *expected_nthreads_str = vector_get(stat_fields, 19);
   p_info->nthreads = atol(expected_nthreads_str);
-  p_info -> vsize = (unsigned long) atol(vector_get(stat_fields, 22));
+  p_info->vsize = (unsigned long)atol(vector_get(stat_fields, 22));
   char *expected_state_str = (char *)vector_get(stat_fields, 2);
-  p_info -> state = (char) (expected_state_str[0]);
+  p_info->state = (char)(expected_state_str[0]);
 
-  p_info -> start_str = malloc(100); // long takes at most 8 bytes
+  p_info->start_str = malloc(100); // long takes at most 8 bytes
   time_t total_seconds_start = atol((char *)vector_get(stat_fields, 21)) / sysconf(_SC_CLK_TCK);
-  struct tm* local_time = localtime(&total_seconds_start);
+  struct tm *local_time = localtime(&total_seconds_start);
 
   size_t nbytes_start_str = time_struct_to_string(p_info->start_str, 100, local_time);
   if (nbytes_start_str >= 100)
     exit(1);
-  
+
   // As mentioned in the man pages of proc/procfs -> divide by sysconf(_SC_CLK_TCK) to get time measured in seconds
   long utime = atol((char *)vector_get(stat_fields, 13)) / sysconf(_SC_CLK_TCK);
   long stime = atol((char *)vector_get(stat_fields, 14)) / sysconf(_SC_CLK_TCK);
@@ -373,13 +421,13 @@ process_info *build_proc_info(process *p) {
   char cpu_str[100];
   int nbytes_cpu = execution_time_to_string(cpu_str, 100, (utime + stime) / 60, (utime + stime) % 60);
 
-  if (nbytes_cpu >= 100) 
+  if (nbytes_cpu >= 100)
     exit(1);
 
   p_info->time_str = strdup(cpu_str);
 
-  p_info -> command = strdup(p->command);
-         
+  p_info->command = strdup(p->command);
+
   sstring_destroy(buffer_sstr);
   vector_destroy(stat_fields);
   fclose(f);
@@ -388,13 +436,16 @@ process_info *build_proc_info(process *p) {
 
 //
 // Entire logic of when `ps` built-in is called
-void execute_ps() { // Make use of `processes` process* vector to extract each
-                    // process*, and then compute its process info from its
-                    // associated process* entry
+void execute_ps()
+{ // Make use of `processes` process* vector to extract each
+  // process*, and then compute its process info from its
+  // associated process* entry
   print_process_info_header();
   size_t processes_len = vector_size(processes);
+  printf("%ld\n", processes_len);
 
-  for (size_t i = 0; i < processes_len; ++i) {
+  for (size_t i = 0; i < processes_len; ++i)
+  {
     process *p = (process *)vector_get(processes, i);
     process_info *p_info = build_proc_info(p);
     print_process_info(p_info);
@@ -412,7 +463,20 @@ void execute_ps() { // Make use of `processes` process* vector to extract each
   free_process(main_p);
 }
 
-int shell(int argc, char *argv[]) {
+
+process *get_process_by_pid(pid_t pid) {
+  size_t processes_len = vector_size(processes);
+  for (size_t i = 0; i < processes_len; ++i) {
+    process *p = (process *) vector_get(processes,i);
+    if (p -> pid == pid) 
+      return p;
+  }
+
+  return NULL; // If process w/ <pid> not found
+}
+
+int shell(int argc, char *argv[])
+{
   // This is the entry point for your shell.
 
   // Handle the relevant signals for the task
@@ -428,12 +492,14 @@ int shell(int argc, char *argv[]) {
   size_t len = 0;
   ssize_t nread;
 
-  while ((nread = getline(&buffer, &len, file)) != -1) {
+  while ((nread = getline(&buffer, &len, file)) != -1)
+  {
 
     // Keep track of commands in history; also - prepare buffer to print: Note
     // the lack of a newline at the end of this prompt.
 
-    if (nread > 0 && buffer[nread - 1] == '\n') {
+    if (nread > 0 && buffer[nread - 1] == '\n')
+    {
       buffer[nread - 1] = '\0';
       // Your shell should also support running a series of commands from a
       // script f
@@ -452,30 +518,38 @@ int shell(int argc, char *argv[]) {
     }
     if (!strncmp(buffer, "exit", 4))
       break;
-    else if (!strcmp(buffer, "!history")) { // !history
+    else if (!strcmp(buffer, "!history"))
+    { // !history
       size_t history_lines =
           vector_size(history); // Print `history` vector line by line
       for (size_t i = 0; i < history_lines; ++i)
         print_history_line(i, (char *)vector_get(history, i));
-    } else if (buffer[0] == '#') { // '#<n>
+    }
+    else if (buffer[0] == '#')
+    { // '#<n>
       size_t command_line_nr = atoi(
           buffer +
           1); // Precondition: "buffer + 1" represents a valid integer: n >= 0
       if (command_line_nr >=
-          vector_size(history)) { //  If `n` is not a valid index, then print
-                                  //  the appropriate error and do not store
-                                  //  anything in the history.
+          vector_size(history))
+      { //  If `n` is not a valid index, then print
+        //  the appropriate error and do not store
+        //  anything in the history.
         print_invalid_index();
-      } else {
+      }
+      else
+      {
         char *cmd = vector_get(history, command_line_nr);
         print_command(cmd); // :warning: Print out the command **before
                             // executing** if there is a match.
         vector_push_back(
             history,
-            cmd); // The command executed should be stored in the history.
+            cmd);             // The command executed should be stored in the history.
         execute_command(cmd); // Execute the command
       }
-    } else if (buffer[0] == '!') {
+    }
+    else if (buffer[0] == '!')
+    {
 
       char *prefix = buffer + 1;
       int last_prefix_found = 0;
@@ -483,18 +557,22 @@ int shell(int argc, char *argv[]) {
 
       if (buffer[1] == '\0') // prefix may be empty
       {                      // Print last cmd in history file, if exists
-        if (!vector_empty(history)) {
+        if (!vector_empty(history))
+        {
           cmd = *vector_back(history);
           last_prefix_found = 1;
         }
       }
 
-      else {
+      else
+      {
         size_t prefix_len = strlen(prefix);
         size_t history_lines = vector_size(history);
-        for (int i = history_lines - 1; i >= 0 && !last_prefix_found; i--) {
+        for (int i = history_lines - 1; i >= 0 && !last_prefix_found; i--)
+        {
           char *history_line = (char *)vector_get(history, i);
-          if (!strncmp(prefix, history_line, prefix_len)) {
+          if (!strncmp(prefix, history_line, prefix_len))
+          {
             cmd = history_line;
             last_prefix_found = 1;
           }
@@ -503,33 +581,56 @@ int shell(int argc, char *argv[]) {
 
       if (!last_prefix_found)
         print_no_history_match();
-      else {
+      else
+      {
         print_command(cmd); // :warning: Print out the command **before
                             // executing** if there is a match.
         vector_push_back(
             history,
-            cmd); // The command executed should be stored in the history.
+            cmd);             // The command executed should be stored in the history.
         execute_command(cmd); // Execute the command
       }
     } // TODO: built-in PART2
     else if (!strcmp(buffer,
-                     "ps")) { //`ps` is a built-in command for your shell
+                     "ps"))
+    { //`ps` is a built-in command for your shell
       execute_ps();
-    } else { // Logical Ops., `cd` OR external commands
+    }
+    else if (!strncmp(buffer, "kill", 4)) {
+      if (strlen(buffer) == 4) // kill was run without a pid
+        print_invalid_command(buffer);
+      else 
+      {
+        pid_t pid;
+        sscanf(buffer + 4, "%d", &pid);
+        process *p = get_process_by_pid(pid);
+        if (!p) 
+          print_no_process_found(pid);
+        else {
+          kill(pid, SIGKILL); // Kill the process
+          print_killed_process(p ->pid, p->command);
+          remove_process(pid); // Remove process from vector & memory (free it)
+        }
+      }
+    }
+    else
+    { // Logical Ops., `cd` OR external commands
       vector_push_back(history, buffer);
       int logical = 0;
 
       sstring *cmds_sstring =
-          cstr_to_sstring(buffer); // We'll have free it afterward
+          cstr_to_sstring(buffer);                            // We'll have free it afterward
       vector *cmds_vector = sstring_split(cmds_sstring, ' '); //
       size_t cmds_len = vector_size(cmds_vector);
 
-      for (size_t i = 0; i < cmds_len && !logical; ++i) {
+      for (size_t i = 0; i < cmds_len && !logical; ++i)
+      {
         char *cmd = vector_get(cmds_vector, i);
         char *left;
         char *right;
 
-        if (!strcmp(cmd, "&&")) {
+        if (!strcmp(cmd, "&&"))
+        {
           right = strdup(buffer);
           char *free_ptr = right;
           left = strsep(&right, "&");
@@ -539,7 +640,9 @@ int shell(int argc, char *argv[]) {
           if (!failed_cmd1)
             execute_command(right);
           free(free_ptr);
-        } else if (!strcmp(cmd, "||")) {
+        }
+        else if (!strcmp(cmd, "||"))
+        {
           right = strdup(buffer);
           char *free_ptr = right;
           left = strsep(&right, "|");
@@ -549,7 +652,9 @@ int shell(int argc, char *argv[]) {
           if (failed_cmd1)
             execute_command(right);
           free(free_ptr);
-        } else if (cmd[strlen(cmd) - 1] == ';') {
+        }
+        else if (cmd[strlen(cmd) - 1] == ';')
+        {
           right = strdup(buffer);
           char *free_ptr = right;
           left = strsep(&right, ";");
@@ -571,7 +676,6 @@ int shell(int argc, char *argv[]) {
         execute_command(buffer);
     }
     print_full_path();
-    wait_for_all_background_child_processes();
   }
 
   // TODO: [Part 2] -> KILL all child processes when: a.) `exit` (notice break
@@ -582,7 +686,8 @@ int shell(int argc, char *argv[]) {
 
   // Upon exiting, the shell should append the commands of the current session
   // into the supplied history file
-  if (h_flag) {
+  if (h_flag)
+  {
     FILE *output = fopen(history_path, "w");
     VECTOR_FOR_EACH(history, buffer,
                     { fprintf(output, "%s\n", (char *)buffer); });
