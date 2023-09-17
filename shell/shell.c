@@ -273,7 +273,7 @@ void solve_redirection(char *buffer, char *cmd)
     ptr = filename;
     actual_cmd = strsep(&filename, "<");
     actual_cmd[strlen(actual_cmd) - 1] = '\0'; // remove space
-    filename += 1;
+    filename += 2;
     f = fopen(filename, "r");
     if (!f)
     {
@@ -493,17 +493,43 @@ process_info *build_proc_info(process *p)
   char *expected_state_str = (char *)vector_get(stat_fields, 2);
   p_info->state = (char)(expected_state_str[0]);
 
-  p_info->start_str = malloc(100); // long takes at most 8 bytes
-  time_t total_seconds_start = atol((char *)vector_get(stat_fields, 21)) / sysconf(_SC_CLK_TCK);
-  struct tm *local_time = localtime(&total_seconds_start);
+  // p_info->start_str = malloc(100); // long takes at most 8 bytes
+  // time_t total_seconds_start = atol((char *)vector_get(stat_fields, 21)) / sysconf(_SC_CLK_TCK);
+  // struct tm *local_time = localtime(&total_seconds_start);
+  
+  long btime = 0;
+  char *proc_stat_line = NULL;
+  size_t proc_stat_line_len;
 
-  size_t nbytes_start_str = time_struct_to_string(p_info->start_str, 100, local_time);
-  if (nbytes_start_str >= 100)
+  FILE *proc_stat_file = fopen("/proc/stat", "r");
+  if (!proc_stat_file)
+  {
+    print_script_file_error();
     exit(1);
+  }
 
-  // As mentioned in the man pages of proc/procfs -> divide by sysconf(_SC_CLK_TCK) to get time measured in seconds
-  long utime = atol((char *)vector_get(stat_fields, 13)) / sysconf(_SC_CLK_TCK);
+  size_t nbytes = -1; 
+  while ((nbytes = getline(&proc_stat_line, &proc_stat_line_len, proc_stat_file))) {
+    if (!strncmp(proc_stat_line, "btime", 5)) {
+      char *line = proc_stat_line + 6;
+      btime = atol(line);
+      break;
+    }
+  }
+  fclose(proc_stat_file);
+  free(proc_stat_line);
+
+  // // As mentioned in the man pages of proc/procfs -> divide by sysconf(_SC_CLK_TCK) to get time measured in seconds
+  long utime = atol((char *)vector_get(stat_fields, 13)) / sysconf(_SC_CLK_TCK); // Will be used (later) in p_info -> time_str
   long stime = atol((char *)vector_get(stat_fields, 14)) / sysconf(_SC_CLK_TCK);
+
+  time_t total_start_time = btime + stime;
+  struct tm *local_time = localtime(&total_start_time);
+  
+  p_info->start_str = malloc(128); // long takes at most 8 bytes
+  size_t nbytes_start_str = time_struct_to_string(p_info->start_str, 128, local_time);
+  if (nbytes_start_str == 0) //error: p_info->start_str.size >= 128
+    exit(1);
 
   char cpu_str[100];
   int nbytes_cpu = execution_time_to_string(cpu_str, 100, (utime + stime) / 60, (utime + stime) % 60);
