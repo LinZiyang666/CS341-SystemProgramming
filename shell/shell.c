@@ -323,6 +323,7 @@ int execute_command(char *buffer)
     // Tip: It is good practice to flush the standard output stream before the
     // fork to be able to correctly display the output. This will also prevent
     // duplicate printing from the child process.
+    fflush(stdin);
     fflush(stdout);
     pid_t child = fork();
     if (child == -1)
