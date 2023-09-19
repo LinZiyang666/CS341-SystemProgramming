@@ -273,7 +273,7 @@ void solve_redirection(char *buffer, char *cmd)
     ptr = filename;
     actual_cmd = strsep(&filename, "<");
     actual_cmd[strlen(actual_cmd) - 1] = '\0'; // remove space
-    filename += 2;
+    filename += 1;
     f = fopen(filename, "r");
     if (!f)
     {
@@ -556,7 +556,6 @@ void execute_ps()
   // associated process* entry
   print_process_info_header();
   size_t processes_len = vector_size(processes);
-  printf("%ld\n", processes_len);
 
   for (size_t i = 0; i < processes_len; ++i)
   {
