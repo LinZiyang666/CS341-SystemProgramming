@@ -220,6 +220,7 @@ void wait_for_all_background_child_processes()
   pid_t pid;
   while ((pid = waitpid(-1, 0, WNOHANG)) > 0)
   {
+    delete_process(pid);
   };
 }
 
@@ -523,12 +524,16 @@ process_info *build_proc_info(process *p)
   // // As mentioned in the man pages of proc/procfs -> divide by sysconf(_SC_CLK_TCK) to get time measured in seconds
   long utime = atol((char *)vector_get(stat_fields, 13)) / sysconf(_SC_CLK_TCK); // Will be used (later) in p_info -> time_str
   long stime = atol((char *)vector_get(stat_fields, 14)) / sysconf(_SC_CLK_TCK);
-
-  time_t total_start_time = btime + stime;
+  // NOTE: check docs for diff between stime and starttime
+  long starttime = atol((char *)vector_get(stat_fields, 21)) / sysconf(_SC_CLK_TCK);
+  
+  time_t total_start_time = btime + starttime;
   struct tm *local_time = localtime(&total_start_time);
   
   p_info->start_str = malloc(128); // long takes at most 8 bytes
   size_t nbytes_start_str = time_struct_to_string(p_info->start_str, 128, local_time);
+
+
   if (nbytes_start_str == 0) //error: p_info->start_str.size >= 128
     exit(1);
 
@@ -555,8 +560,8 @@ void execute_ps()
   // process*, and then compute its process info from its
   // associated process* entry
   print_process_info_header();
-  size_t processes_len = vector_size(processes);
 
+  size_t processes_len = vector_size(processes);
   for (size_t i = 0; i < processes_len; ++i)
   {
     process *p = (process *)vector_get(processes, i);
