@@ -490,7 +490,7 @@ process_info *build_proc_info(process *p)
 
   char *expected_nthreads_str = vector_get(stat_fields, 19);
   p_info->nthreads = atol(expected_nthreads_str);
-  p_info->vsize = (unsigned long)atol(vector_get(stat_fields, 22));
+  p_info->vsize = (unsigned long)atol(vector_get(stat_fields, 22)) / 1024;
   char *expected_state_str = (char *)vector_get(stat_fields, 2);
   p_info->state = (char)(expected_state_str[0]);
 
