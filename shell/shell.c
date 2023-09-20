@@ -540,7 +540,7 @@ process_info *build_proc_info(process *p)
   char cpu_str[100];
   int nbytes_cpu = execution_time_to_string(cpu_str, 100, (utime + stime) / 60, (utime + stime) % 60);
 
-  if (nbytes_cpu >= 100)
+  if (nbytes_cpu >= 100) // see return value of `snprintf`: Thus, a return value of size  or  more  means that the output was truncated.  (See also below under NOTES.)
     exit(1);
 
   p_info->time_str = strdup(cpu_str);
