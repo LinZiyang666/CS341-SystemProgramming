@@ -23,7 +23,11 @@ static size_t buddy_size[16] = {(1 << 3), (1 << 4), (1 << 5), (1 << 6), (1 << 7)
 static node_t *suballocators_h[16]; // suballocators_h[i] = head of the suballocator list for nodes w/ size <= 2^i; check `buddy-size` for more info
 
 
-
+void *allocate_node(size_t size);
+size_t get_allocator(size_t size); 
+void *best_fit(node_t *node, size_t allocator);
+void remove_from_free_list(node_t *node, size_t allocator);
+void split_node(node_t *node, size_t size);
 
 
 /**
@@ -83,7 +87,29 @@ void *calloc(size_t num, size_t size) {
  */
 void *malloc(size_t size) {
     // implement malloc!
-    return NULL;
+    
+    if (size <= 0) // don't allocate - @see http://www.cplusplus.com/reference/clibrary/cstdlib/malloc/
+        return NULL;
+    size_t allocator = get_allocator(size);
+
+    if (suballocators_h[allocator] == NULL) { // no free node that we can reuse => use `sbrk`
+        void *ptr = allocate_node(size);
+        if (ptr == (void*) -1)
+            return NULL;
+        return ptr;
+    }
+    else {
+        void *ptr = best_fit(size, allocator); 
+        if (!ptr)
+            ptr = allocate_node(size);
+        else 
+        {
+            remove_from_free_list(ptr, allocator);
+            ptr->free = 0; // mark as taken
+            split_node(ptr, size);
+            return ((node_t *)ptr + 1); // Return the (!) user-accessible memory (!) 
+        }
+    }
 }
 
 /**
