@@ -239,6 +239,8 @@ void solve_redirection(char *buffer, char *cmd)
     actual_cmd = strsep(&filename, ">");
     actual_cmd[strlen(actual_cmd) - 1] = '\0'; // remove space
     filename += 1;
+    print_command_executed(getpid());
+      
     f = fopen(filename, "w");
     if (!f)
     {
@@ -258,6 +260,8 @@ void solve_redirection(char *buffer, char *cmd)
     actual_cmd[strlen(actual_cmd) - 1] = '\0'; // remove space
     filename += 2;
     f = fopen(filename, "a");
+    print_command_executed(getpid());
+
     if (!f)
     {
       print_redirection_file_error();
@@ -276,6 +280,8 @@ void solve_redirection(char *buffer, char *cmd)
     actual_cmd[strlen(actual_cmd) - 1] = '\0'; // remove space
     filename += 1;
     f = fopen(filename, "r");
+    print_command_executed(getpid());
+
     if (!f)
     {
       print_redirection_file_error();
@@ -375,9 +381,11 @@ int execute_command(char *buffer)
         free(redirect_cmd);
       }
 
-      print_command_executed(getpid());
       cmds[tokens_until_redirect_symbol] = NULL; // Use only the commands: cmds[0], cmds[1], ..., cmds[tokens - 1]
     
+
+      if (!is_redirection) print_command_executed(getpid());
+
       int succ_exec = execvp(cmds[0], cmds);
       if (succ_exec == -1) // exec only returns to the child process when the
                            // command fails to execute successfully
