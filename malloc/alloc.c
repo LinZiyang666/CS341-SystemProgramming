@@ -9,9 +9,9 @@
 
 struct node {
   char is_free;      // 1, if free, 0 else
-  size_t size;       // size of node
   struct node *prev; // pointer to prev node
   struct node *next; // pointer to next node
+  size_t size;       // size of node
 };
 
 typedef struct node node_t;
@@ -113,19 +113,21 @@ void *malloc(size_t size) {
   if (suballocators_h[allocator] ==
       NULL) { // no free node that we can reuse => use `sbrk`
     node_t *ptr = allocate_node(size);
-    if (ptr == (void *)-1)
+    if (ptr == (void *)-1) {
       return NULL;
-    return ptr;
+    }
+    void *usable_mem = (char *)ptr + sizeof(node_t);
+    return usable_mem; // Return the (!) user-accessible memory (!)
   } else {
     node_t *ptr = best_fit(size, allocator);
     if (!ptr) {
       ptr = allocate_node(size);
-      return ptr;
+      return (void *)(ptr + 1); // Return the (!) user-accessible memory (!)
     } else {
       remove_from_free_list(ptr, allocator);
       ptr->is_free = 0; // mark as taken
       split_node(ptr, size);
-      return ((node_t *)ptr + 1); // Return the (!) user-accessible memory (!)
+      return (void *)(ptr + 1); // Return the (!) user-accessible memory (!)
     }
   }
 }
@@ -317,23 +319,26 @@ void insert_front(node_t *node, size_t allocator) {
   node_t *suballocator_h = suballocators_h[allocator];
   if (suballocator_h == NULL) {
     suballocators_h[allocator] = node;
+    return;
   }
 
-  node->prev = NULL;
-  node->next = suballocator_h;
-  suballocator_h->prev = node;
-  suballocators_h[allocator] = node;
+  else {
+    node->prev = NULL;
+    node->next = suballocator_h;
+    suballocator_h->prev = node;
+    suballocators_h[allocator] = node;
+  }
 }
 
 /*
  *
  */
 void coalesce_next(node_t *node) {
-  node_t *neigh = (node_t*) ((char *)(node + 1) + node->size);
-  if ((void *)neigh < sbrk(0) // inside the heap memory owned
+  node_t *neigh = (node_t *)((char *)(node + 1) + node->size);
+  if (((void *)neigh < sbrk(0)) // inside the heap memory owned
       && neigh->is_free) {
     size_t neigh_allocator = get_allocator(neigh->size);
     insert_front(neigh, neigh_allocator);
-    node->size += sizeof(node_t) + neigh->size;// Update the new larger node
+    node->size += sizeof(node_t) + neigh->size; // Update the new larger node
   }
 }
