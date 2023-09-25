@@ -40,6 +40,7 @@ node_t *best_fit(size_t size, size_t allocator);
 void remove_from_free_list(node_t *node, size_t allocator);
 void split_node(node_t *node, size_t new_size);
 void insert_front(node_t *node, size_t allocator);
+void coalesce_next(node_t *node); // TODO: impl
 
 /**
  * Allocate space for array in memory
@@ -143,6 +144,25 @@ void *malloc(size_t size) {
  */
 void free(void *ptr) {
   // implement free!
+  if (ptr == NULL ||
+      ptr >=
+          sbrk(0)) // Invalid ptr, points outside (above) the heap allocated mem
+    return;
+
+  node_t *node = (node_t *)ptr - 1;
+  if (node->is_free)
+    return; // (!) Already freed, do not double free
+
+  node->is_free = 1;
+  coalesce_next(node); 
+
+  size_t allocator = get_allocator(node->size);
+ 
+  //TODO: later on change the policy by trial & error AND/OR research
+  if (allocator >= 8 && (char*) ptr + node->size >= (char *) sbrk(0)) 
+    sbrk(0 - (sizeof(node_t) + node->size)); // Release memory back to kernel
+
+  insert_front(node, allocator);
 }
 
 /**
@@ -262,35 +282,40 @@ void remove_from_free_list(node_t *node, size_t allocator) {
 }
 
 /*
-* Split the `node` into -> node with `new_size` of data being used (in order to reduce the internal fragmentation) & node `created` that is marked and free and added to the associated suballocator's list
-*/
-void split_node(node_t *node, size_t new_size) { 
-    
-    if (node->size >= new_size + sizeof(node_t) + FRAGMENT)  // Only split if we exceed the FRAGMENT treshold, to: not external fragment our memory
-    { // We are ensured to write in a memory owned by US
-        node_t *created = (node_t *) ((char *)(node + 1) + node -> size);
-        created->size = node->size - (new_size + sizeof(node_t));
-        created->is_free = 1;
+ * Split the `node` into -> node with `new_size` of data being used (in order to
+ * reduce the internal fragmentation) & node `created` that is marked and free
+ * and added to the associated suballocator's list
+ */
+void split_node(node_t *node, size_t new_size) {
 
-        node->size = new_size;
+  if (node->size >=
+      new_size + sizeof(node_t) +
+          FRAGMENT) // Only split if we exceed the FRAGMENT treshold, to: not
+                    // external fragment our memory
+  {                 // We are ensured to write in a memory owned by US
+    node_t *created = (node_t *)((char *)(node + 1) + node->size);
+    created->size = node->size - (new_size + sizeof(node_t));
+    created->is_free = 1;
 
-        size_t allocator = get_allocator(created->size);
-        insert_front(created, allocator);
-    }
+    node->size = new_size;
+
+    size_t allocator = get_allocator(created->size);
+    insert_front(created, allocator);
+  }
 }
 
 /*
-* Insert `node` to the front of the suballocator indexed at `allocator` 's list
-* If the list is EMPTY -> make `node` the head of the list
-*/
-void insert_front(node_t *node, size_t allocator) { 
-    node_t *suballocator_h = suballocators_h[allocator]; 
-    if (suballocator_h == NULL) {
-        suballocators_h[allocator] = node;
-    }
-
-    node -> prev = NULL;
-    node -> next = suballocator_h; 
-    suballocator_h -> prev = node; 
+ * Insert `node` to the front of the suballocator indexed at `allocator` 's list
+ * If the list is EMPTY -> make `node` the head of the list
+ */
+void insert_front(node_t *node, size_t allocator) {
+  node_t *suballocator_h = suballocators_h[allocator];
+  if (suballocator_h == NULL) {
     suballocators_h[allocator] = node;
+  }
+
+  node->prev = NULL;
+  node->next = suballocator_h;
+  suballocator_h->prev = node;
+  suballocators_h[allocator] = node;
 }
