@@ -18,7 +18,11 @@ typedef struct node node_t;
 
 // Try implementing a simpler variant of a binary Buddy Allocator
 
+// Treshold for
 static size_t FRAGMENT = 4; // TODO: Tweak this param. afterwards
+
+// if nbytes > 2^7, free by sending memory back to kernel
+static size_t FREE_TRESHOLD = 4; // TODO: Tweak this param. afterwards
 
 static size_t
     buddy_size[16] = {(1 << 3),  (1 << 4),  (1 << 5),  (1 << 6),  (1 << 7),
@@ -154,12 +158,13 @@ void free(void *ptr) {
     return; // (!) Already freed, do not double free
 
   node->is_free = 1;
-  coalesce_next(node); 
+  coalesce_next(node);
 
   size_t allocator = get_allocator(node->size);
- 
-  //TODO: later on change the policy by trial & error AND/OR research
-  if (allocator >= 8 && (char*) ptr + node->size >= (char *) sbrk(0)) 
+
+  // TODO: later on change the policy by trial & error AND/OR research
+  if (allocator >= FREE_TRESHOLD &&
+      (char *)ptr + node->size >= (char *)sbrk(0)) //
     sbrk(0 - (sizeof(node_t) + node->size)); // Release memory back to kernel
 
   insert_front(node, allocator);
@@ -318,4 +323,17 @@ void insert_front(node_t *node, size_t allocator) {
   node->next = suballocator_h;
   suballocator_h->prev = node;
   suballocators_h[allocator] = node;
+}
+
+/*
+ *
+ */
+void coalesce_next(node_t *node) {
+  node_t *neigh = (node_t*) ((char *)(node + 1) + node->size);
+  if ((void *)neigh < sbrk(0) // inside the heap memory owned
+      && neigh->is_free) {
+    size_t neigh_allocator = get_allocator(neigh->size);
+    insert_front(neigh, neigh_allocator);
+    node->size += sizeof(node_t) + neigh->size;// Update the new larger node
+  }
 }
