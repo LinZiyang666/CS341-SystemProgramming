@@ -7,6 +7,25 @@
 #include <string.h>
 #include <unistd.h>
 
+struct node {
+    char is_free; // 1, if free, 0 else
+    size_t size; // size of node
+    struct node *prev;  // pointer to prev node
+    struct node *next;  // pointer to next node
+};
+
+typedef struct node node_t;
+
+// Try implementing a simpler variant of a binary Buddy Allocator
+
+static size_t buddy_size[16] = {(1 << 3), (1 << 4), (1 << 5), (1 << 6), (1 << 7), (1 << 8), (1 << 9), (1 << 10), (1 << 11), (1 << 12), (1 << 13), (1 << 14), (1 << 15), (1 << 16), (1 << 17),  (1 <<18)}; // buddy_size[i] = head of free list allocator associated w/ size 2^(i+3), i in [0, 16); allocate all free blocks w/ sz <= 2 ^i in buddy_size[i]; if sz > (1 << 18), allocate to buddy_size[15] - last cell
+
+static node_t *suballocators_h[16]; // suballocators_h[i] = head of the suballocator list for nodes w/ size <= 2^i; check `buddy-size` for more info
+
+
+
+
+
 /**
  * Allocate space for array in memory
  *
@@ -32,7 +51,13 @@
  */
 void *calloc(size_t num, size_t size) {
     // implement calloc!
-    return NULL;
+    size_t nbytes = num * size; 
+    char *ptr = malloc(nbytes);
+    if (ptr == NULL) return NULL;
+    else {
+        memset(ptr, 0, nbytes); // zero out the bytes;
+        return ptr;
+    }
 }
 
 /**
