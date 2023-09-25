@@ -166,10 +166,11 @@ void free(void *ptr) {
 
   // TODO: later on change the policy by trial & error AND/OR research
   if (allocator >= FREE_TRESHOLD &&
-      (char *)ptr + node->size >= (char *)sbrk(0)) //
+      (char *)ptr + node->size >= (char *)sbrk(0)) { // Last on heap
     sbrk(0 - (sizeof(node_t) + node->size)); // Release memory back to kernel
-
-  insert_front(node, allocator);
+    node->is_free = 0;
+  } else
+    insert_front(node, allocator);
 }
 
 /**
@@ -264,7 +265,7 @@ node_t *best_fit(size_t size, size_t allocator) {
   node_t *suballocator_h = suballocators_h[allocator];
   for (node_t *walk = suballocator_h; walk != NULL; walk = walk->next) {
     if (size <= walk->size) { // candidate
-      if (!node || node->size > size)
+      if (node == NULL || node->size > walk->size)
         node = walk;
     }
   }
