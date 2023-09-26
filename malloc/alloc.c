@@ -16,6 +16,14 @@ struct node {
 
 typedef struct node node_t;
 
+size_t get_allocator(size_t size);
+node_t *allocate_node(size_t size);
+node_t *best_fit(size_t size, size_t allocator);
+void remove_from_free_list(node_t *node, size_t allocator);
+void split_node(node_t *node, size_t new_size);
+void insert_front(node_t *node, size_t allocator);
+void coalesce_next(node_t *node);
+
 // Try implementing a simpler variant of a binary Buddy Allocator
 
 // Treshold for
@@ -37,14 +45,6 @@ static size_t
 static node_t *suballocators_h[16]; // suballocators_h[i] = head of the
                                     // suballocator list for nodes w/ size <=
                                     // 2^i; check `buddy-size` for more info
-
-size_t get_allocator(size_t size);
-node_t *allocate_node(size_t size);
-node_t *best_fit(size_t size, size_t allocator);
-void remove_from_free_list(node_t *node, size_t allocator);
-void split_node(node_t *node, size_t new_size);
-void insert_front(node_t *node, size_t allocator);
-void coalesce_next(node_t *node); // TODO: impl
 
 /**
  * Allocate space for array in memory
@@ -119,15 +119,15 @@ void *malloc(size_t size) {
     void *usable_mem = (char *)ptr + sizeof(node_t);
     return usable_mem; // Return the (!) user-accessible memory (!)
   } else {
-    node_t *ptr = best_fit(size, allocator);
-    if (!ptr) {
-      ptr = allocate_node(size);
-      return (void *)(ptr + 1); // Return the (!) user-accessible memory (!)
+    node_t *node = best_fit(size, allocator);
+    if (!node) {
+      node = allocate_node(size);
+      return (void *)(node + 1); // Return the (!) user-accessible memory (!)
     } else {
-      remove_from_free_list(ptr, allocator);
-      ptr->is_free = 0; // mark as taken
-      split_node(ptr, size);
-      return (void *)(ptr + 1); // Return the (!) user-accessible memory (!)
+      remove_from_free_list(node, allocator);
+      node->is_free = 0; // mark as taken
+      split_node(node, size);
+      return (void *)(node + 1); // Return the (!) user-accessible memory (!)
     }
   }
 }
@@ -205,6 +205,7 @@ void free(void *ptr) {
  *    If it is 0 and ptr points to an existing block of memory, the memory
  *    block pointed by ptr is deallocated and a NULL pointer is returned.
  *
+ *
  * @return
  *    A pointer to the reallocated memory block, which may be either the
  *    same as the ptr argument or a new location.
@@ -220,7 +221,38 @@ void free(void *ptr) {
  */
 void *realloc(void *ptr, size_t size) {
   // implement realloc!
-  return NULL;
+  if (ptr == NULL) {
+    return malloc(size);
+  } else if (size == 0) {
+    free(ptr);
+    return NULL;
+  }
+
+  node_t *node = (node_t *)ptr - 1;
+  if (size <= node->size) {
+    split_node(node, size);
+    return ((node_t *)node + 1);
+  } else { // we need more memory
+    coalesce_next(node);
+    if (node->size >= size) // Trade-off: even though we add a bit of internal
+                            // defragmentation (node->size - size not used in
+                            // cur node), we don't have to call `split` again
+      return ((node_t *)node + 1); // TODO: test w/ calling split_node
+
+    // We avoided to malloc so far, but no alternative was succesful. Thus, we have to `malloc` now (SLOW!)
+    node_t *reallocd = malloc(size);
+    if (!reallocd) // malloc failed
+      return NULL;
+    
+    memcpy(realloc, ptr, node->size); // The content of the memory block is preserved (first node->size bytes); the rest size - node->size bytes are indeterminate
+
+    reallocd->size = size;
+    reallocd->is_free = 0; 
+    // The function moves the memory block to a new location, in which case
+    // the new location is returned. 
+    free(ptr);
+    return reallocd;
+  }
 }
 
 // ------------------ HELPER FUNCTIONS ------------------
@@ -301,7 +333,7 @@ void split_node(node_t *node, size_t new_size) {
           FRAGMENT) // Only split if we exceed the FRAGMENT treshold, to: not
                     // external fragment our memory
   {                 // We are ensured to write in a memory owned by US
-    node_t *created = (node_t *)((char *)(node + 1) + node->size);
+    node_t *created = (node_t *)((char *)(node + 1) + new_size);
     created->size = node->size - (new_size + sizeof(node_t));
     created->is_free = 1;
 
@@ -318,7 +350,7 @@ void split_node(node_t *node, size_t new_size) {
  */
 void insert_front(node_t *node, size_t allocator) {
   node_t *suballocator_h = suballocators_h[allocator];
-  if (suballocator_h == NULL) {
+  if (suballocator_h == NULL || suballocator_h == node) {
     suballocators_h[allocator] = node;
     return;
   }
@@ -332,7 +364,8 @@ void insert_front(node_t *node, size_t allocator) {
 }
 
 /*
- *
+ * Merge with free niehgbour (if neigh. is free), making `node` a larger free
+ * block so that we reduce the defragmentation of our memory.
  */
 void coalesce_next(node_t *node) {
   node_t *neigh = (node_t *)((char *)(node + 1) + node->size);
