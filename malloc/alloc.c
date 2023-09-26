@@ -18,7 +18,7 @@ struct node {
 
 typedef struct node node_t;
 
-const int SPLIT_TRESHOLD = 512; // Only split a block if it "is worth it" <=> diff. in prev v.s new size >= SPLIT_TRESHOLD
+static size_t SPLIT_TRESHOLD = 512; // Only split a block if it "is worth it" <=> diff. in prev v.s new size >= SPLIT_TRESHOLD
 
 // HEAD: maintains a LL ordered by adresses
 static node_t *head = NULL; // TODO: later impl a free list, now: all nodes in
@@ -43,8 +43,61 @@ int split_succ(size_t size, node_t *node) {
     neigh->is_free = 1;
     neigh->ptr = neigh + 1;
     neigh->next = node; // neigh has a "later" address than node => insert it to its left (remember: LL is ordered by addresses in decreasing order, so that we can keep top of the heap in head
-    neigh->size = node->size - sizeof(node_t); 
+    neigh -> size = node->size - (size + sizeof(node_t)); 
+    if (node->prev == NULL) {
+      head = neigh;
+    }
+    else {
+      node->prev->next = neigh;
+    }
+
+    neigh->prev = node->prev;
+    node->prev = neigh;
+
+    node->size = size;
+    return 1;
   }
+  else return 0;
+}
+
+
+void coalesce_prev(node_t *node) { // Merge node & node->prev into `node`
+  node->size += node->prev->size + sizeof(node_t); 
+  node->prev = node->prev->prev; 
+  if (node->prev == NULL)
+    head = node;
+  else
+   node->prev->next = node;
+}
+
+node_t *coalesce_next(node_t *node) { // Merge node & node->next into `node->next`
+  node->next->size += node->size + sizeof(node_t); 
+  node->next->prev = node->prev; 
+  if (node->prev == NULL)
+    head = node->next;
+  else
+   node->prev->next = node->next;
+
+  return node->next;
+}
+
+/*
+ * Try to coaleste current free node `node` with its neighbours, both prev and next
+ * If both are free => coalesce all three blocks
+ * If only one out of two is free (prev or next) -> coalesce w/ that one
+ * If neither is free -> NOP
+*/
+void coalesce_free_neighbours(node_t *node) {
+
+  if (node->prev && node->prev->is_free) {
+    coalesce_prev(node);
+    total_memory_requested -= sizeof(node_t);
+  }
+  if (node->next && node->next->is_free) {
+    node = coalesce_next(node);
+    total_memory_requested -= sizeof(node_t);
+  }
+
 }
 
 
@@ -200,9 +253,7 @@ void *malloc(size_t size) {
  */
 void free(void *ptr) {
   // implement free!
-  if (ptr == NULL ||
-      ptr >=
-          sbrk(0)) // Invalid ptr, points outside (above) the heap allocated mem
+  if (ptr == NULL)
     return;
 
   node_t *node = (node_t *)ptr - 1;
@@ -210,17 +261,8 @@ void free(void *ptr) {
     return; // (!) Already freed, do not double free
 
   node->is_free = 1;
-  coalesce_next(node);
-
-  size_t allocator = get_allocator(node->size);
-
-  // TODO: later on change the policy by trial & error AND/OR research
-  if (allocator >= FREE_TRESHOLD &&
-      (char *)ptr + node->size >= (char *)sbrk(0)) { // Last on heap
-    sbrk(0 - (sizeof(node_t) + node->size)); // Release memory back to kernel
-    node->is_free = 0;
-  } else
-    insert_front(node, allocator);
+  total_memory_requested -= node->size;
+  coalesce_free_neighbours(node);
 }
 
 /**
@@ -271,160 +313,8 @@ void free(void *ptr) {
  */
 void *realloc(void *ptr, size_t size) {
   // implement realloc!
-  if (ptr == NULL) {
-    return malloc(size);
-  } else if (size == 0) {
-    free(ptr);
-    return NULL;
-  }
-
-  node_t *node = (node_t *)ptr - 1;
-  if (size <= node->size) {
-    split_node(node, size);
-    return ptr;
-  } else { // we need more memory
-    coalesce_next(node);
-    if (node->size >= size) // Trade-off: even though we add a bit of internal
-                            // defragmentation (node->size - size not used in
-                            // cur node), we don't have to call `split` again
-      return ((node_t *)node + 1); // TODO: test w/ calling split_node
-
-    // We avoided to malloc so far, but no alternative was succesful. Thus, we
-    // have to `malloc` now (SLOW!)
-    node_t *reallocd = malloc(size);
-    if (!reallocd) // malloc failed
-      return NULL;
-
-    memcpy(realloc, ptr,
-           node->size); // The content of the memory block is preserved (first
-                        // node->size bytes); the rest size - node->size bytes
-                        // are indeterminate
-
-    // The function moves the memory block to a new location, in which case
-    // the new location is returned.
-    free(ptr);
-    return reallocd;
-  }
+ 
+  return NULL; //TODO: Impl
 }
 
 // ------------------ HELPER FUNCTIONS ------------------
-
-/*
-  Get the index in the buddy_size C-array, which tells us: what free list (i.e:
-  suballocators) to use for the free node w/ this size
-*/
-size_t get_allocator(size_t size) {
-
-  for (size_t allocator = 0; allocator < 16; ++allocator)
-    if (size <= buddy_size[allocator]) // found!
-      return allocator;
-
-  return 15; // TODO: Later improve the policy to not allocate all free nodes w/
-             // size > (1 << 16) to last allocator
-}
-
-/*
- sbrk() to increase the heap size
-*/
-node_t *allocate_node(size_t size) {
-  node_t *node = sbrk(sizeof(node_t) + size);
-  if (node == (void *)-1)
-    return NULL;
-  node->size = size;
-  node->is_free = 0; // taken
-  node->prev = node->next = NULL;
-  return node;
-}
-
-/*
- * Search for the best_fit in the suballocator specific to size `size`
- * best_fit = the smallest size node that has enough capacity (node->size >=
- * size) to allow the current node to fit (i.e.: has at least size `size`) In
- * case of tie -> choose the left-most (first one found) one If no node found ->
- * ret. NULL
- */
-node_t *best_fit(size_t size, size_t allocator) {
-  node_t *node = NULL;
-
-  node_t *suballocator_h = suballocators_h[allocator];
-  for (node_t *walk = suballocator_h; walk != NULL; walk = walk->next) {
-    if (size <= walk->size) { // candidate
-      if (node == NULL || node->size > walk->size)
-        node = walk;
-    }
-  }
-  return node;
-}
-
-void remove_from_free_list(node_t *node, size_t allocator) {
-  node_t *prev_node = node->prev;
-  node_t *next_node = node->next;
-
-  if (prev_node == NULL) // it was the head
-  {
-    suballocators_h[allocator] = NULL;
-  } else {
-    prev_node->next = next_node;
-    if (next_node)
-      next_node->prev = prev_node;
-  }
-
-  // Clean-up links (redundant, but great practice)
-  node->prev = node->next = NULL;
-}
-
-/*
- * Split the `node` into -> node with `new_size` of data being used (in order to
- * reduce the internal fragmentation) & node `created` that is marked and free
- * and added to the associated suballocator's list
- */
-void split_node(node_t *node, size_t new_size) {
-
-  if (node->size >=
-      new_size + sizeof(node_t) +
-          FRAGMENT) // Only split if we exceed the FRAGMENT treshold, to: not
-                    // external fragment our memory
-  {                 // We are ensured to write in a memory owned by US
-    node_t *created = (node_t *)((char *)(node + 1) + new_size);
-    created->size = node->size - (new_size + sizeof(node_t));
-    created->is_free = 1;
-
-    node->size = new_size;
-
-    size_t allocator = get_allocator(created->size);
-    insert_front(created, allocator);
-  }
-}
-
-/*
- * Insert `node` to the front of the suballocator indexed at `allocator` 's list
- * If the list is EMPTY -> make `node` the head of the list
- */
-void insert_front(node_t *node, size_t allocator) {
-  node_t *suballocator_h = suballocators_h[allocator];
-  if (suballocator_h == NULL) {
-    suballocators_h[allocator] = node;
-    return;
-  }
-
-  else {
-    node->prev = NULL;
-    node->next = suballocator_h;
-    suballocator_h->prev = node;
-    suballocators_h[allocator] = node;
-  }
-}
-
-/*
- * Merge with free niehgbour (if neigh. is free), making `node` a larger free
- * block so that we reduce the defragmentation of our memory.
- */
-void coalesce_next(node_t *node) {
-  node_t *neigh = (node_t *)((char *)(node + 1) + node->size);
-  if (((void *)neigh < sbrk(0)) // inside the heap memory owned
-      && neigh->is_free) {
-    size_t neigh_allocator = get_allocator(neigh->size);
-    insert_front(neigh, neigh_allocator);
-    node->size += sizeof(node_t) + neigh->size; // Update the new larger node
-  }
-}
