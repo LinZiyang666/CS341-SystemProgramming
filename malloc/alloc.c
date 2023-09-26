@@ -36,6 +36,7 @@ static size_t total_memory_sbrk = 0; // current memory requested from kernel
 /*
  * Try to split `node_t *node` into two nodes
  * Has side effects: after the call (if succesful), node should have size `size`, while the other node the remaining size (node_prev_size - size - metdata)
+ * Neigh inserted before node
  * Return 1 if the split was succesful, or 0 otherwise
 */
 int split_succ(size_t size, node_t *node) { 
@@ -316,7 +317,34 @@ void free(void *ptr) {
 void *realloc(void *ptr, size_t size) {
   // implement realloc!
  
-  return NULL; //TODO: Impl
+  if (ptr == NULL) return malloc(size);
+  else if (size == 0) {
+    free(ptr);
+    return NULL; 
+  }
+
+  node_t *node = (node_t*)ptr - 1;
+  if (split_succ(size, node)) {
+    node_t *neigh = node -> prev; // See contract of `split_succ` -> neigh inserted before node
+    total_memory_requested += neigh->size; // This one is free for use now for a diff. user
+  }
+
+  if (size <= node->size) return ptr;  // Trade-off: internal fragmentation so that we do not complicate it anymore 
+  
+  node_t *neigh = node->prev;
+  if (neigh && neigh->is_free && node->size + (neigh -> size +sizeof(node_t)) >= size) // can coalesce w/ before in order to `realloc` in these 2 merged blocks
+  {
+   coalesce_prev(node); // node w/ neighbor in `node`
+   total_memory_requested += neigh->size; // We make use of previous `neigh->size` allocated but unused mem
+   return node->ptr;
+  } 
+  //TODO: for performance tests: try to coalesce w/ next as well
+  else { // No alternative left, other than moving data from `node_t *node` to a newly created node
+    node_t *new_node = malloc(size);
+    memcpy(new_node, ptr, node->size); // last 'new_size - node->size" values are indeterminate
+    free(ptr); // Check ED: Question that I've asked about `realloc`
+    return new_node; 
+  }
 }
 
 // ------------------ HELPER FUNCTIONS ------------------
