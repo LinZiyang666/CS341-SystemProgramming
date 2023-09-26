@@ -227,8 +227,8 @@ void *malloc(size_t size) {
       }
 
       head = winner;
-      total_memory_requested += sizeof(node_t) + size;
-      total_memory_sbrk += sizeof(node_t) + size;
+      total_memory_requested += /* sizeof(node_t) */ + size;
+      total_memory_sbrk += /* sizeof(node_t) */ + size;
     }
   }
 

@@ -4,8 +4,8 @@
  */
 #include "tester-utils.h"
 
-#define START_MALLOC_SIZE (1 * G)
-#define STOP_MALLOC_SIZE (1 * K)
+#define START_MALLOC_SIZE (8)
+#define STOP_MALLOC_SIZE (1 * 1)
 
 void *reduce(void *ptr, int size) {
     if (size > STOP_MALLOC_SIZE) {
