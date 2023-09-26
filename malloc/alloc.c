@@ -22,8 +22,6 @@ static size_t SPLIT_TRESHOLD =
     1024; // Only split a block if it "is worth it" <=> diff. in prev v.s new
           // size >= SPLIT_TRESHOLD
 
-static size_t SPLIT_FACTOR = 2; // To not sigsegv, only
-
 // HEAD: maintains a LL ordered by adresses
 static node_t *head = NULL; // TODO: later impl a free list, now: all nodes in
                             // the same list marked `is_free` or not;
@@ -46,8 +44,7 @@ static size_t total_memory_sbrk = 0; // current memory requested from kernel
  */
 int split_succ(size_t size, node_t *node) {
 
-  if (node->size - size >= SPLIT_TRESHOLD &&
-      node->size >= SPLIT_FACTOR * size) {
+  if (node->size > size && node->size - size >= SPLIT_TRESHOLD) { // First check needed, or else: unsigned int overflow
     node_t *neigh = node->ptr + size;
     neigh->is_free = 1;
     neigh->ptr = neigh + 1;
@@ -192,7 +189,7 @@ void *malloc(size_t size) {
                               // and ii.) new `free_noe` -> which holds
                               // (prev_size - size - metadata) and is free => we
                               // use extra `metadata` memory from heap as a
-                              // trade-off agains internal fragmentation
+                              // trade-off against internal fragmentation
           total_memory_requested += sizeof(node_t);
       }
       walk = walk->next;
@@ -214,7 +211,7 @@ void *malloc(size_t size) {
       head->size += extra_size;
       head->is_free = 0; // not free anymore, we've just aquired it
       winner = head;
-      total_memory_requested += head->size;
+      total_memory_requested += size;
     } else {
       // Allocate a new node_t of size `size`
       winner = sbrk(sizeof(node_t) + size);
@@ -235,8 +232,8 @@ void *malloc(size_t size) {
       }
 
       head = winner;
-      total_memory_requested += /* sizeof(node_t) */ +size;
-      total_memory_sbrk += /* sizeof(node_t) */ +size;
+      total_memory_requested += size;
+      total_memory_sbrk += size;
     }
   }
 
