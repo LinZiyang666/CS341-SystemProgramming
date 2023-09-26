@@ -104,6 +104,8 @@ void *calloc(size_t num, size_t size) {
  */
 void *malloc(size_t size) {
   // implement malloc!
+  //
+  if (size % 16) size += (16 - (size % 16)); //16-bytes alligned
 
   if (size <= 0) // don't allocate - @see
                  // http://www.cplusplus.com/reference/clibrary/cstdlib/malloc/
@@ -113,7 +115,7 @@ void *malloc(size_t size) {
   if (suballocators_h[allocator] ==
       NULL) { // no free node that we can reuse => use `sbrk`
     node_t *ptr = allocate_node(size);
-    if (ptr == (void *)-1) {
+    if (ptr == NULL) {
       return NULL;
     }
     void *usable_mem = (char *)ptr + sizeof(node_t);
@@ -122,6 +124,7 @@ void *malloc(size_t size) {
     node_t *node = best_fit(size, allocator);
     if (!node) {
       node = allocate_node(size);
+      if (node == NULL) return NULL;
       return (void *)(node + 1); // Return the (!) user-accessible memory (!)
     } else {
       remove_from_free_list(node, allocator);
@@ -231,7 +234,7 @@ void *realloc(void *ptr, size_t size) {
   node_t *node = (node_t *)ptr - 1;
   if (size <= node->size) {
     split_node(node, size);
-    return ((node_t *)node + 1);
+    return ptr;
   } else { // we need more memory
     coalesce_next(node);
     if (node->size >= size) // Trade-off: even though we add a bit of internal
@@ -245,9 +248,7 @@ void *realloc(void *ptr, size_t size) {
       return NULL;
     
     memcpy(realloc, ptr, node->size); // The content of the memory block is preserved (first node->size bytes); the rest size - node->size bytes are indeterminate
-
-    reallocd->size = size;
-    reallocd->is_free = 0; 
+   
     // The function moves the memory block to a new location, in which case
     // the new location is returned. 
     free(ptr);
@@ -350,7 +351,7 @@ void split_node(node_t *node, size_t new_size) {
  */
 void insert_front(node_t *node, size_t allocator) {
   node_t *suballocator_h = suballocators_h[allocator];
-  if (suballocator_h == NULL || suballocator_h == node) {
+  if (suballocator_h == NULL) {
     suballocators_h[allocator] = node;
     return;
   }
