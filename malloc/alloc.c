@@ -20,6 +20,8 @@ typedef struct node node_t;
 
 static size_t SPLIT_TRESHOLD = 512; // Only split a block if it "is worth it" <=> diff. in prev v.s new size >= SPLIT_TRESHOLD
 
+static size_t SPLIT_FACTOR = 2; // To not sigsegv, only 
+
 // HEAD: maintains a LL ordered by adresses
 static node_t *head = NULL; // TODO: later impl a free list, now: all nodes in
                             // the same list marked `is_free` or not;
@@ -38,7 +40,7 @@ static size_t total_memory_sbrk = 0; // current memory requested from kernel
 */
 int split_succ(size_t size, node_t *node) { 
 
-  if (node->size - size >= SPLIT_TRESHOLD) {
+  if (node->size - size >= SPLIT_TRESHOLD && node->size >= SPLIT_FACTOR * size) {
     node_t *neigh = node->ptr + size;
     neigh->is_free = 1;
     neigh->ptr = neigh + 1;
