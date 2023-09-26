@@ -8,43 +8,46 @@
 #include <unistd.h>
 
 struct node {
-  char is_free;      // 1, if free, 0 else
+  void *ptr; // TODO: later impl. pointer arith, at the moment: make sure it
+             // works easily`
+  size_t size;       // size of node
+  int is_free;       // 1, if free, 0 else
   struct node *prev; // pointer to prev node
   struct node *next; // pointer to next node
-  size_t size;       // size of node
 };
 
 typedef struct node node_t;
 
-size_t get_allocator(size_t size);
-node_t *allocate_node(size_t size);
-node_t *best_fit(size_t size, size_t allocator);
-void remove_from_free_list(node_t *node, size_t allocator);
-void split_node(node_t *node, size_t new_size);
-void insert_front(node_t *node, size_t allocator);
-void coalesce_next(node_t *node);
+const int SPLIT_TRESHOLD = 512; // Only split a block if it "is worth it" <=> diff. in prev v.s new size >= SPLIT_TRESHOLD
 
-// Try implementing a simpler variant of a binary Buddy Allocator
+// HEAD: maintains a LL ordered by adresses
+static node_t *head = NULL; // TODO: later impl a free list, now: all nodes in
+                            // the same list marked `is_free` or not;
+// Similar to `mini_memcheck` lab, make use of:
+static size_t total_memory_requested =
+    0; // current memory in-use by USER from the heap (requested by user throughout the
+       // lifetime of the program; Keeps track of how much memory the user holds at any given point in time (i.e.: it may have used `sbrk` for more memory, but freed over time, thus total_mem_requested <= total_mem_sbrk
+static size_t total_memory_sbrk = 0; // current memory requested from kernel
+// by calling syscall `sbrk`
 
-// Treshold for
-static size_t FRAGMENT = 4; // TODO: Tweak this param. afterwards
 
-// if nbytes > 2^7, free by sending memory back to kernel
-static size_t FREE_TRESHOLD = 4; // TODO: Tweak this param. afterwards
+/*
+ * Try to split `node_t *node` into two nodes
+ * Has side effects: after the call (if succesful), node should have size `size`, while the other node the remaining size (node_prev_size - size - metdata)
+ * Return 1 if the split was succesful, or 0 otherwise
+*/
+int split_succ(size_t size, node_t *node) { 
 
-static size_t
-    buddy_size[16] = {(1 << 3),  (1 << 4),  (1 << 5),  (1 << 6),  (1 << 7),
-                      (1 << 8),  (1 << 9),  (1 << 10), (1 << 11), (1 << 12),
-                      (1 << 13), (1 << 14), (1 << 15), (1 << 16), (1 << 17),
-                      (1 << 18)}; // buddy_size[i] = head of free list allocator
-                                  // associated w/ size 2^(i+3), i in [0, 16);
-                                  // allocate all free blocks w/ sz <= 2 ^i in
-                                  // buddy_size[i]; if sz > (1 << 18), allocate
-                                  // to buddy_size[15] - last cell
+  if (node->size - size >= SPLIT_TRESHOLD) {
+    node_t *neigh = node->ptr + size;
+    neigh->is_free = 1;
+    neigh->ptr = neigh + 1;
+    neigh->next = node; // neigh has a "later" address than node => insert it to its left (remember: LL is ordered by addresses in decreasing order, so that we can keep top of the heap in head
+    neigh->size = node->size - sizeof(node_t); 
+  }
+}
 
-static node_t *suballocators_h[16]; // suballocators_h[i] = head of the
-                                    // suballocator list for nodes w/ size <=
-                                    // 2^i; check `buddy-size` for more info
+
 
 /**
  * Allocate space for array in memory
@@ -105,34 +108,78 @@ void *calloc(size_t num, size_t size) {
 void *malloc(size_t size) {
   // implement malloc!
   //
-  if (size % 16) size += (16 - (size % 16)); //16-bytes alligned
 
   if (size <= 0) // don't allocate - @see
                  // http://www.cplusplus.com/reference/clibrary/cstdlib/malloc/
     return NULL;
-  size_t allocator = get_allocator(size);
 
-  if (suballocators_h[allocator] ==
-      NULL) { // no free node that we can reuse => use `sbrk`
-    node_t *ptr = allocate_node(size);
-    if (ptr == NULL) {
-      return NULL;
+  node_t *walk = head;
+  node_t *winner = NULL;
+  int winner_found = 0;
+
+  size_t heap_memory_available = total_memory_sbrk - total_memory_requested;
+  if (heap_memory_available >= size) // we can allocate a new node_t w/ `size`
+                                     // without requesting from kernel again :D
+  {
+    // First-fit; TODO: Try other strategies for performance
+    while (walk && !winner_found) {
+      if (walk->is_free && walk->size >= size) {
+        winner = walk;
+        if (split_succ(size,
+                       walk)) // Splitted `walk` into two nodes: i.) new `walk`
+                              // -> which holds exactly `size` and is not free,
+                              // and ii.) new `free_noe` -> which holds
+                              // (prev_size - size - metadata) and is free => we
+                              // use extra `metadata` memory from heap as a
+                              // trade-off agains internal fragmentation
+          total_memory_requested += sizeof(node_t);
+      }
+      walk = walk->next;
     }
-    void *usable_mem = (char *)ptr + sizeof(node_t);
-    return usable_mem; // Return the (!) user-accessible memory (!)
-  } else {
-    node_t *node = best_fit(size, allocator);
-    if (!node) {
-      node = allocate_node(size);
-      if (node == NULL) return NULL;
-      return (void *)(node + 1); // Return the (!) user-accessible memory (!)
-    } else {
-      remove_from_free_list(node, allocator);
-      node->is_free = 0; // mark as taken
-      split_node(node, size);
-      return (void *)(node + 1); // Return the (!) user-accessible memory (!)
+
+    if (winner_found) {
+      winner->is_free = 0;
+      total_memory_requested += winner->size;
+    }
+  } else { // do `sbrk` :( (SLOW)
+
+    if (head && head->is_free) // As HEAD contains the top of the heap, we can
+                               // try to enlarge it with the extra_size needed
+                               // => reduce internal fragmentation
+    {
+      size_t extra_size = size - head->size;
+      if (sbrk(extra_size) == (void *) -1) // sbrk failed
+        return NULL;
+      total_memory_sbrk += extra_size;
+      head->size += extra_size; 
+      head->is_free = 0; // not free anymore, we've just aquired it
+      winner = head;
+      total_memory_requested += head->size;
+    }
+    else {
+      // Allocate a new node_t of size `size`
+      winner = sbrk(sizeof(node_t) + size);
+      if (winner == (void *) -1) return NULL; // `sbrk` failed
+
+      winner->is_free = 0;
+      winner->size = size;
+      winner->ptr = winner + 1;
+      winner->next = head; // Insert to the start of the list => make it the new HEAD, as it is the top of the heap now (after `sbrk`)
+
+      if (head != NULL) {
+        head->prev = winner;
+      }
+      else {
+        winner->prev = NULL;
+      }
+
+      head = winner;
+      total_memory_requested += sizeof(node_t) + size;
+      total_memory_sbrk += sizeof(node_t) + size;
     }
   }
+
+    return winner->ptr; // RETURN: usabele memory (to user) 
 }
 
 /**
@@ -242,15 +289,19 @@ void *realloc(void *ptr, size_t size) {
                             // cur node), we don't have to call `split` again
       return ((node_t *)node + 1); // TODO: test w/ calling split_node
 
-    // We avoided to malloc so far, but no alternative was succesful. Thus, we have to `malloc` now (SLOW!)
+    // We avoided to malloc so far, but no alternative was succesful. Thus, we
+    // have to `malloc` now (SLOW!)
     node_t *reallocd = malloc(size);
     if (!reallocd) // malloc failed
       return NULL;
-    
-    memcpy(realloc, ptr, node->size); // The content of the memory block is preserved (first node->size bytes); the rest size - node->size bytes are indeterminate
-   
+
+    memcpy(realloc, ptr,
+           node->size); // The content of the memory block is preserved (first
+                        // node->size bytes); the rest size - node->size bytes
+                        // are indeterminate
+
     // The function moves the memory block to a new location, in which case
-    // the new location is returned. 
+    // the new location is returned.
     free(ptr);
     return reallocd;
   }
