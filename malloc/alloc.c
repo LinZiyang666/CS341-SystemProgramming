@@ -8,49 +8,57 @@
 #include <unistd.h>
 
 struct node {
-  void *ptr; // TODO: later impl. pointer arith, at the moment: make sure it
-             // works easily`
-  size_t size;       // size of node
-  int is_free;       // 1, if free, 0 else
+  void *ptr;   // TODO: later impl. pointer arith, at the moment: make sure it
+               // works easily`
+  size_t size; // size of node
+  int is_free; // 1, if free, 0 else
   struct node *prev; // pointer to prev node
   struct node *next; // pointer to next node
 };
 
 typedef struct node node_t;
 
-static size_t SPLIT_TRESHOLD = 512; // Only split a block if it "is worth it" <=> diff. in prev v.s new size >= SPLIT_TRESHOLD
+static size_t SPLIT_TRESHOLD =
+    1024; // Only split a block if it "is worth it" <=> diff. in prev v.s new
+          // size >= SPLIT_TRESHOLD
 
-static size_t SPLIT_FACTOR = 2; // To not sigsegv, only 
+static size_t SPLIT_FACTOR = 2; // To not sigsegv, only
 
 // HEAD: maintains a LL ordered by adresses
 static node_t *head = NULL; // TODO: later impl a free list, now: all nodes in
                             // the same list marked `is_free` or not;
 // Similar to `mini_memcheck` lab, make use of:
 static size_t total_memory_requested =
-    0; // current memory in-use by USER from the heap (requested by user throughout the
-       // lifetime of the program; Keeps track of how much memory the user holds at any given point in time (i.e.: it may have used `sbrk` for more memory, but freed over time, thus total_mem_requested <= total_mem_sbrk
+    0; // current memory in-use by USER from the heap (requested by user
+       // throughout the lifetime of the program; Keeps track of how much memory
+       // the user holds at any given point in time (i.e.: it may have used
+       // `sbrk` for more memory, but freed over time, thus total_mem_requested
+       // <= total_mem_sbrk
 static size_t total_memory_sbrk = 0; // current memory requested from kernel
 // by calling syscall `sbrk`
 
-
 /*
  * Try to split `node_t *node` into two nodes
- * Has side effects: after the call (if succesful), node should have size `size`, while the other node the remaining size (node_prev_size - size - metdata)
- * Neigh inserted before node
- * Return 1 if the split was succesful, or 0 otherwise
-*/
-int split_succ(size_t size, node_t *node) { 
+ * Has side effects: after the call (if succesful), node should have size
+ * `size`, while the other node the remaining size (node_prev_size - size -
+ * metdata) Neigh inserted before node Return 1 if the split was succesful, or 0
+ * otherwise
+ */
+int split_succ(size_t size, node_t *node) {
 
-  if (node->size - size >= SPLIT_TRESHOLD && node->size >= SPLIT_FACTOR * size) {
+  if (node->size - size >= SPLIT_TRESHOLD &&
+      node->size >= SPLIT_FACTOR * size) {
     node_t *neigh = node->ptr + size;
     neigh->is_free = 1;
     neigh->ptr = neigh + 1;
-    neigh->next = node; // neigh has a "later" address than node => insert it to its left (remember: LL is ordered by addresses in decreasing order, so that we can keep top of the heap in head
-    neigh -> size = node->size - (size + sizeof(node_t)); 
+    neigh->next =
+        node; // neigh has a "later" address than node => insert it to its left
+              // (remember: LL is ordered by addresses in decreasing order, so
+              // that we can keep top of the heap in head
+    neigh->size = node->size - (size + sizeof(node_t));
     if (node->prev == NULL) {
       head = neigh;
-    }
-    else {
+    } else {
       node->prev->next = neigh;
     }
 
@@ -59,37 +67,36 @@ int split_succ(size_t size, node_t *node) {
 
     node->size = size;
     return 1;
-  }
-  else return 0;
+  } else
+    return 0;
 }
 
-
 void coalesce_prev(node_t *node) { // Merge node & node->prev into `node`
-  node->size += node->prev->size + sizeof(node_t); 
-  node->prev = node->prev->prev; 
+  node->size += node->prev->size + sizeof(node_t);
+  node->prev = node->prev->prev;
   if (node->prev == NULL)
     head = node;
   else
-   node->prev->next = node;
+    node->prev->next = node;
 }
 
-node_t *coalesce_next(node_t *node) { // Merge node & node->next into `node->next`
-  node->next->size += node->size + sizeof(node_t); 
-  node->next->prev = node->prev; 
+node_t *
+coalesce_next(node_t *node) { // Merge node & node->next into `node->next`
+  node->next->size += node->size + sizeof(node_t);
+  node->next->prev = node->prev;
   if (node->prev == NULL)
     head = node->next;
   else
-   node->prev->next = node->next;
+    node->prev->next = node->next;
 
   return node->next;
 }
 
 /*
- * Try to coaleste current free node `node` with its neighbours, both prev and next
- * If both are free => coalesce all three blocks
- * If only one out of two is free (prev or next) -> coalesce w/ that one
- * If neither is free -> NOP
-*/
+ * Try to coaleste current free node `node` with its neighbours, both prev and
+ * next If both are free => coalesce all three blocks If only one out of two is
+ * free (prev or next) -> coalesce w/ that one If neither is free -> NOP
+ */
 void coalesce_free_neighbours(node_t *node) {
 
   if (node->prev && node->prev->is_free) {
@@ -100,10 +107,7 @@ void coalesce_free_neighbours(node_t *node) {
     node = coalesce_next(node);
     total_memory_requested -= sizeof(node_t);
   }
-
 }
-
-
 
 /**
  * Allocate space for array in memory
@@ -181,6 +185,7 @@ void *malloc(size_t size) {
     while (walk && !winner_found) {
       if (walk->is_free && walk->size >= size) {
         winner = walk;
+        winner_found = 1;
         if (split_succ(size,
                        walk)) // Splitted `walk` into two nodes: i.) new `walk`
                               // -> which holds exactly `size` and is not free,
@@ -192,11 +197,10 @@ void *malloc(size_t size) {
       }
       walk = walk->next;
     }
-
-    if (winner_found) {
-      winner->is_free = 0;
-      total_memory_requested += winner->size;
-    }
+  }
+  if (winner_found) {
+    winner->is_free = 0;
+    total_memory_requested += winner->size;
   } else { // do `sbrk` :( (SLOW)
 
     if (head && head->is_free) // As HEAD contains the top of the heap, we can
@@ -204,38 +208,39 @@ void *malloc(size_t size) {
                                // => reduce internal fragmentation
     {
       size_t extra_size = size - head->size;
-      if (sbrk(extra_size) == (void *) -1) // sbrk failed
+      if (sbrk(extra_size) == (void *)-1) // sbrk failed
         return NULL;
       total_memory_sbrk += extra_size;
-      head->size += extra_size; 
+      head->size += extra_size;
       head->is_free = 0; // not free anymore, we've just aquired it
       winner = head;
       total_memory_requested += head->size;
-    }
-    else {
+    } else {
       // Allocate a new node_t of size `size`
       winner = sbrk(sizeof(node_t) + size);
-      if (winner == (void *) -1) return NULL; // `sbrk` failed
+      if (winner == (void *)-1)
+        return NULL; // `sbrk` failed
 
       winner->is_free = 0;
       winner->size = size;
       winner->ptr = winner + 1;
-      winner->next = head; // Insert to the start of the list => make it the new HEAD, as it is the top of the heap now (after `sbrk`)
+      winner->next =
+          head; // Insert to the start of the list => make it the new HEAD, as
+                // it is the top of the heap now (after `sbrk`)
 
       if (head != NULL) {
         head->prev = winner;
-      }
-      else {
+      } else {
         winner->prev = NULL;
       }
 
       head = winner;
-      total_memory_requested += /* sizeof(node_t) */ + size;
-      total_memory_sbrk += /* sizeof(node_t) */ + size;
+      total_memory_requested += /* sizeof(node_t) */ +size;
+      total_memory_sbrk += /* sizeof(node_t) */ +size;
     }
   }
 
-    return winner->ptr; // RETURN: usabele memory (to user) 
+  return winner->ptr; // RETURN: usabele memory (to user)
 }
 
 /**
@@ -316,34 +321,46 @@ void free(void *ptr) {
  */
 void *realloc(void *ptr, size_t size) {
   // implement realloc!
- 
-  if (ptr == NULL) return malloc(size);
+
+  if (ptr == NULL)
+    return malloc(size);
   else if (size == 0) {
     free(ptr);
-    return NULL; 
+    return NULL;
   }
 
-  node_t *node = (node_t*)ptr - 1;
+  node_t *node = (node_t *)ptr - 1;
   if (split_succ(size, node)) {
-    node_t *neigh = node -> prev; // See contract of `split_succ` -> neigh inserted before node
-    total_memory_requested += neigh->size; // This one is free for use now for a diff. user
+    node_t *neigh = node->prev; // See contract of `split_succ` -> neigh
+                                // inserted before node
+    total_memory_requested -=
+        neigh->size; // This one is free for use now for a diff. user
   }
 
-  if (size <= node->size) return ptr;  // Trade-off: internal fragmentation so that we do not complicate it anymore 
-  
+  if (size <= node->size)
+    return ptr; // Trade-off: internal fragmentation so that we do not
+                // complicate it anymore
+
   node_t *neigh = node->prev;
-  if (neigh && neigh->is_free && node->size + (neigh -> size +sizeof(node_t)) >= size) // can coalesce w/ before in order to `realloc` in these 2 merged blocks
+  if (neigh && neigh->is_free &&
+      node->size + (neigh->size + sizeof(node_t)) >=
+          size) // can coalesce w/ before in order to `realloc` in these 2
+                // merged blocks
   {
-   coalesce_prev(node); // node w/ neighbor in `node`
-   total_memory_requested += neigh->size; // We make use of previous `neigh->size` allocated but unused mem
-   return node->ptr;
-  } 
-  //TODO: for performance tests: try to coalesce w/ next as well
-  else { // No alternative left, other than moving data from `node_t *node` to a newly created node
+    coalesce_prev(node); // node w/ neighbor in `node`
+    total_memory_requested +=
+        neigh->size; // We make use of previous `neigh->size` allocated but
+                     // unused mem
+    return node->ptr;
+  }
+  // TODO: for performance tests: try to coalesce w/ next as well
+  else { // No alternative left, other than moving data from `node_t *node` to a
+         // newly created node
     node_t *new_node = malloc(size);
-    memcpy(new_node, ptr, node->size); // last 'new_size - node->size" values are indeterminate
-    free(ptr); // Check ED: Question that I've asked about `realloc`
-    return new_node; 
+    memcpy(new_node, ptr,
+           node->size); // last 'new_size - node->size" values are indeterminate
+    free(ptr);          // Check ED: Question that I've asked about `realloc`
+    return new_node;
   }
 }
 
