@@ -8,8 +8,6 @@
 #include <unistd.h>
 
 struct node {
-  void *ptr;   // TODO: later impl. pointer arith, at the moment: make sure it
-               // works easily`
   size_t size; // size of node
   int is_free; // 1, if free, 0 else
   struct node *prev; // pointer to prev node
@@ -44,10 +42,11 @@ static size_t total_memory_sbrk = 0; // current memory requested from kernel
  */
 int split_succ(size_t size, node_t *node) {
 
-  if (node->size > size && node->size - size >= SPLIT_TRESHOLD) { // First check needed, or else: unsigned int overflow
-    node_t *neigh = node->ptr + size;
+  if (node->size > size &&
+      node->size - size >= SPLIT_TRESHOLD) { // First check needed, or else:
+                                             // unsigned int overflow
+    node_t *neigh = (node_t*)((char *)(node + 1) + size);
     neigh->is_free = 1;
-    neigh->ptr = neigh + 1;
     neigh->next =
         node; // neigh has a "later" address than node => insert it to its left
               // (remember: LL is ordered by addresses in decreasing order, so
@@ -220,7 +219,6 @@ void *malloc(size_t size) {
 
       winner->is_free = 0;
       winner->size = size;
-      winner->ptr = winner + 1;
       winner->next =
           head; // Insert to the start of the list => make it the new HEAD, as
                 // it is the top of the heap now (after `sbrk`)
@@ -237,7 +235,7 @@ void *malloc(size_t size) {
     }
   }
 
-  return winner->ptr; // RETURN: usabele memory (to user)
+  return winner + 1; // RETURN: usabele memory (to user)
 }
 
 /**
@@ -348,7 +346,7 @@ void *realloc(void *ptr, size_t size) {
     total_memory_requested +=
         neigh->size; // We make use of previous `neigh->size` allocated but
                      // unused mem
-    return node->ptr;
+    return node + 1;
   }
   // TODO: for performance tests: try to coalesce w/ next as well
   else { // No alternative left, other than moving data from `node_t *node` to a
