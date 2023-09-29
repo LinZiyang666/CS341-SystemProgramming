@@ -50,7 +50,9 @@ void queue_destroy(queue *this) {
   pthread_mutex_destroy(&this->m);
   queue_node *walk = this->head;
   while (walk != this->tail) {
-    // !!!!!! free(walk->data); // WRONG -> deallocate all the storage capacaity allocated by the queue, so only the `queue_node*`, the `void *data` was passed as arg, we used the one allocated by the caller
+    // !!!!!! free(walk->data); // WRONG -> deallocate all the storage capacaity
+    // allocated by the queue, so only the `queue_node*`, the `void *data` was
+    // passed as arg, we used the one allocated by the caller
     queue_node *prev = walk;
     walk = walk->next;
     prev->next = NULL;
@@ -66,10 +68,10 @@ void queue_push(queue *this, void *data) {
   /* Your code here */
   pthread_mutex_lock(&this->m);
 
-  while (
-      this->size ==
-      this->max_size) // Blocks if the queue is full (defined by it's max_size).
-                      // ; if max_size < 0, while cond is always false
+  while (this->max_size >= 0 && // NON-POSITIVE <=> this->max_size <= 0
+         this->size == this->max_size) // Blocks if the queue is full (defined
+                                       // by it's max_size). ; if max_size < 0,
+                                       // while cond is always false
     pthread_cond_wait(&this->cv, &this->m);
 
   // Enque to end (tail)
@@ -100,7 +102,7 @@ void *queue_pull(queue *this) {
 
   void *data = this->head->data;
   node = this->head;
-  this->head = this->head->next;  
+  this->head = this->head->next;
   free(node);
   node = NULL;
 
@@ -112,5 +114,5 @@ void *queue_pull(queue *this) {
   pthread_cond_broadcast(&this->cv);
   pthread_mutex_unlock(&this->m);
 
-  return data;  // TODO: clarify if we return data or node
+  return data; // TODO: clarify if we return data or node
 }
