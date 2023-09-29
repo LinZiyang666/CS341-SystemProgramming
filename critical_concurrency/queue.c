@@ -68,7 +68,7 @@ void queue_push(queue *this, void *data) {
   /* Your code here */
   pthread_mutex_lock(&this->m);
 
-  while (this->max_size >= 0 && // NON-POSITIVE <=> this->max_size <= 0
+  while (this->max_size > 0 && // !NON-POSITIVE <=> positive (>0) <=> this->max_size <= 0
          this->size == this->max_size) // Blocks if the queue is full (defined
                                        // by it's max_size). ; if max_size < 0,
                                        // while cond is always false

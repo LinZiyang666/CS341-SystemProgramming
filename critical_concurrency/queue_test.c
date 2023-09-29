@@ -89,6 +89,24 @@ void dont_block_push_neg_max_size() {
     queue_destroy(q);
 }
 
+void non_positive_edge_case() {
+    queue *q = queue_create(0);
+    queue_push(q, (void *)1);
+    queue_push(q, (void *)2);
+    queue_push(q, (void *)3);
+    printf("q.top() = %ld\n", (size_t) queue_pull(q)); 
+    printf("q.top() = %ld\n", (size_t) queue_pull(q)); 
+    printf("q.top() = %ld\n", (size_t) queue_pull(q)); 
+   
+    queue_destroy(q);
+}
+void test_negative_large() { 
+    queue *q = queue_create(-100);
+    queue_push(q, (void *)1);
+    printf("q.top() = %ld\n", (size_t) queue_pull(q)); 
+    queue_destroy(q);
+}
+
 int main(int argc, char **argv) {
     /* if (argc != 3) {
         printf("usage: %s test_number return_code\n", argv[0]);
@@ -103,6 +121,10 @@ int main(int argc, char **argv) {
     block_push_max_size(); 
     printf("--------------\n");
     dont_block_push_neg_max_size();
+    printf("--------------\n");
+    non_positive_edge_case();
+    printf("--------------\n");
+    test_negative_large();
     printf("--------------\n");
 
 
