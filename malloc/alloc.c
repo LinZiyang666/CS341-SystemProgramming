@@ -42,7 +42,7 @@ static size_t total_memory_sbrk = 0; // current memory requested from kernel
  */
 int split_succ(size_t size, node_t *node) {
 
-  if (node->size > size &&
+  if (node->size >= 2 * size && // make sure we don't access a next node that is not owned by us
       node->size - size >= SPLIT_TRESHOLD) { // First check needed, or else:
                                              // unsigned int overflow
     node_t *neigh = (node_t*)((char *)(node + 1) + size);
@@ -97,11 +97,11 @@ void coalesce_free_neighbours(node_t *node) {
 
   if (node->prev && node->prev->is_free) {
     coalesce_prev(node);
-    total_memory_requested += sizeof(node_t);
+    //total_memory_requested += sizeof(node_t);
   }
   if (node->next && node->next->is_free) {
     node = coalesce_next(node);
-    total_memory_requested += sizeof(node_t);
+    //total_memory_requested += sizeof(node_t);
   }
 }
 
@@ -182,14 +182,15 @@ void *malloc(size_t size) {
       if (walk->is_free && walk->size >= size) {
         winner = walk;
         winner_found = 1;
-        if (split_succ(size,
-                       walk)) // Splitted `walk` into two nodes: i.) new `walk`
+        split_succ(size, walk);
+        //if (split_succ(size,
+          //             walk)) // Splitted `walk` into two nodes: i.) new `walk`
                               // -> which holds exactly `size` and is not free,
                               // and ii.) new `free_node` -> which holds
                               // (prev_size - size - metadata) and is free => we
                               // use extra `metadata` memory from heap as a
                               // trade-off against internal fragmentation
-          total_memory_requested -= sizeof(node_t);
+          //total_memory_requested -= sizeof(node_t);
       }
       walk = walk->next;
     }
@@ -314,7 +315,7 @@ void free(void *ptr) {
  *
  * @see http://www.cplusplus.com/reference/clibrary/cstdlib/realloc/
  */
-void *realloc(void *ptr, size_t size) {
+void *realloc(void *ptr, size_t size) { 
   // implement realloc!
 
   if (ptr == NULL)
@@ -323,12 +324,13 @@ void *realloc(void *ptr, size_t size) {
     free(ptr);
     return NULL;
   }
-
-  node_t *node = (node_t *)ptr - 1;
+ 
+  node_t *node = (node_t *)ptr - 1; // !!! for `node` user already requested `node->size` memory in the past
+  
   if (split_succ(size, node)) {
     node_t *neigh = node->prev; // See contract of `split_succ` -> neigh
                                 // inserted before node
-    total_memory_requested -=
+     total_memory_requested -=
         neigh->size; // This one is free for use now for a diff. user
   }
 
@@ -344,11 +346,10 @@ void *realloc(void *ptr, size_t size) {
   {
     coalesce_prev(node); // node w/ neighbor in `node`
     total_memory_requested +=
-        neigh->size; // We make use of previous `neigh->size` allocated but
+        neigh->size + sizeof(node_t); // We make use of previous `neigh->size` allocated but
                      // unused mem
     return node + 1;
   }
-  // TODO: for performance tests: try to coalesce w/ next as well
   else { // No alternative left, other than moving data from `node_t *node` to a
          // newly created node
     node_t *new_node = malloc(size);
