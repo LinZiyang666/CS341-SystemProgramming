@@ -174,8 +174,8 @@ void *malloc(size_t size) {
   int winner_found = 0;
 
   size_t heap_memory_available = total_memory_sbrk - total_memory_requested;
-  if (heap_memory_available >= size) // we can allocate a new node_t w/ `size`
-                                     // without requesting from kernel again :D
+  if (heap_memory_available >= size) // try to allocate a new node_t w/ `size`
+                                     // without requesting from kernel again :D: if there is a large-enough free block 
   {
     // First-fit; TODO: Try other strategies for performance
     while (walk && !winner_found) {
@@ -185,7 +185,7 @@ void *malloc(size_t size) {
         if (split_succ(size,
                        walk)) // Splitted `walk` into two nodes: i.) new `walk`
                               // -> which holds exactly `size` and is not free,
-                              // and ii.) new `free_noe` -> which holds
+                              // and ii.) new `free_node` -> which holds
                               // (prev_size - size - metadata) and is free => we
                               // use extra `metadata` memory from heap as a
                               // trade-off against internal fragmentation
