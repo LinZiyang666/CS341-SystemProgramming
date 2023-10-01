@@ -97,11 +97,11 @@ void coalesce_free_neighbours(node_t *node) {
 
   if (node->prev && node->prev->is_free) {
     coalesce_prev(node);
-    total_memory_requested -= sizeof(node_t);
+    total_memory_requested += sizeof(node_t);
   }
   if (node->next && node->next->is_free) {
     node = coalesce_next(node);
-    total_memory_requested -= sizeof(node_t);
+    total_memory_requested += sizeof(node_t);
   }
 }
 
@@ -189,7 +189,7 @@ void *malloc(size_t size) {
                               // (prev_size - size - metadata) and is free => we
                               // use extra `metadata` memory from heap as a
                               // trade-off against internal fragmentation
-          total_memory_requested += sizeof(node_t);
+          total_memory_requested -= sizeof(node_t);
       }
       walk = walk->next;
     }
