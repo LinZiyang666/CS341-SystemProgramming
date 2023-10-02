@@ -8,20 +8,20 @@
 #include <unistd.h>
 
 struct node {
-  size_t size;           // size of node
-  char is_free;          // 1, if free, 0 else
+  size_t size;            // size of node
+  char is_free;           // 1, if free, 0 else
   struct node *prev_free; // ptr to prev node in free list
   struct node *next_free; // ptr to prev node in free list
 };
 typedef struct node node_t;
 
 struct btag {
-  size_t size; 
+  size_t size;
 };
 typedef struct btag btag_t;
 
 static size_t SPLIT_TRESHOLD =
-    1024; // Only split a block if it "is worth it" <=> diff. in prev v.s new
+    512; // Only split a block if it "is worth it" <=> diff. in prev v.s new
           // size >= SPLIT_TRESHOLD
 
 static node_t *head_free = NULL; // free list head
@@ -72,26 +72,43 @@ from free list, as it will be combined in
 node from now on => `node_next` does not
 exist by itself anymore
 */
-void coalesce_two_blocks_after(node_t *node,
-                               node_t *next_node);
+void coalesce_two_blocks_after(node_t *node, node_t *next_node);
 
-node_t *get_next_mem (node_t *node);
-node_t *get_prev_mem (node_t *node); 
+node_t *get_next_mem(node_t *node);
+node_t *get_prev_mem(node_t *node);
 
-node_t *get_next_mem(node_t *node) {
-  char *p = (char*)node;
-  node_t *cand = (node_t*)(p + sizeof(node_t) + node->size + sizeof(btag_t));
-  if (cand > tail_mem) return NULL;
-  else return cand;
+// After coalescing, `node_to_update` has a new btag `next_node_btag` and a `new_size` that we have to store
+void update_node_size(node_t *node_to_update, btag_t *next_node_btag, size_t new_size);
+
+// Do ptr. arith to obtain `node`_s b(oundary )tag field
+btag_t *get_node_btag(node_t *node) {
+  btag_t *node_btag = (btag_t*)((char*)(node + 1) + node->size);
+  return node_btag;
 }
 
-node_t *get_prev_mem (node_t *node) { 
-  char *p = (char*)node;
-  btag_t *start_btag_prev = (btag_t*)(p - sizeof(btag_t));
-  char *data_prev = (char*)start_btag_prev - start_btag_prev->size;
-  node_t *prev_mem = (node_t*)(data_prev - sizeof(node_t));
-  if (prev_mem < start_mem) return NULL;
-  else return prev_mem;
+void update_node_size(node_t *new_node_start, btag_t *new_btag, size_t new_size) {
+  new_node_start->size += new_size;
+  new_btag -> size = new_node_start->size;
+}
+
+node_t *get_next_mem(node_t *node) {
+  char *p = (char *)node;
+  node_t *cand = (node_t *)(p + sizeof(node_t) + node->size + sizeof(btag_t));
+  if (cand > tail_mem)
+    return NULL;
+  else
+    return cand;
+}
+
+node_t *get_prev_mem(node_t *node) {
+  char *p = (char *)node;
+  btag_t *start_btag_prev = (btag_t *)(p - sizeof(btag_t));
+  char *data_prev = (char *)start_btag_prev - start_btag_prev->size;
+  node_t *prev_mem = (node_t *)(data_prev - sizeof(node_t));
+  if (prev_mem < start_mem)
+    return NULL;
+  else
+    return prev_mem;
 }
 
 void coalesce_three_blocks(node_t *node, node_t *prev_node, node_t *next_node) {
@@ -100,31 +117,33 @@ void coalesce_three_blocks(node_t *node, node_t *prev_node, node_t *next_node) {
   if (!next_next_node)
     tail_mem = prev_node;
 
-  prev_node->size += 2 * sizeof(node_t) + 2 * sizeof(btag_t) + node->size + next_node->size;
-  btag_t *next_node_btag = (btag_t*)((char*)(next_node + 1) + next_node->size);
-  next_node_btag->size = prev_node->size;
+  btag_t *next_node_btag = get_node_btag(next_node);
+  size_t new_size = 2 * sizeof(node_t) + 2 * sizeof(btag_t) + node->size + next_node->size;
+  update_node_size(prev_node, next_node_btag, new_size);
+
 }
 
 void coalesce_two_blocks_before(node_t *node, node_t *prev_node,
                                 node_t *next_node) {
   if (!next_node)
     tail_mem = prev_node;
-  prev_node->size += sizeof(node_t) + sizeof(btag_t) + node->size;
-  btag_t *node_btag = (btag_t*)((char*)(node + 1) + node->size);
-  node_btag->size = prev_node->size;
+
+   btag_t *node_btag = get_node_btag(node);
+   size_t new_size = sizeof(node_t) + sizeof(btag_t) + node->size;
+  update_node_size(prev_node, node_btag, new_size);
 }
 
-void coalesce_two_blocks_after(node_t *node,
-                               node_t *next_node) {
+void coalesce_two_blocks_after(node_t *node, node_t *next_node) {
   remove_free(next_node);
   node_t *next_next_node = get_next_mem(next_node);
   if (!next_next_node)
     tail_mem = node;
 
   node->is_free = 1;
-  node->size += sizeof(node_t) + sizeof(btag_t) + next_node->size;
-  btag_t *next_node_btag = (btag_t*)((char*)(next_node + 1) + next_node->size);
-  next_node_btag->size = node->size;
+
+  btag_t *next_node_btag = get_node_btag(next_node);
+  size_t new_size = sizeof(node_t) + sizeof(btag_t) + next_node->size; 
+  update_node_size(node, next_node_btag, new_size);
   insert_free(node);
 }
 
@@ -173,27 +192,29 @@ void *alloc_new(size_t size) {
 
   node->size = size;
   node->is_free = 0;
-  btag_t *node_btag = (btag_t*)((char*)(node + 1) + node->size);
+  btag_t *node_btag = (btag_t *)((char *)(node + 1) + node->size);
   node_btag->size = size;
 
   return (node + 1);
 }
 
 void alloc_free_split(size_t size, node_t *node) {
-  node_t *extra_node = (node_t *)((char *)node + sizeof(node_t) + size + sizeof(btag_t));
-  //node_t *next_node = get_next_mem(node);
+  node_t *extra_node =
+      (node_t *)((char *)node + sizeof(node_t) + size + sizeof(btag_t));
 
   // Update the new splitted sizes
   extra_node->size = node->size - sizeof(node_t) - size - sizeof(btag_t);
   extra_node->is_free = 1;
-  btag_t *extra_node_btag = (btag_t*)((char*)(extra_node + 1) + extra_node->size);
+  btag_t *extra_node_btag =
+      (btag_t *)((char *)(extra_node + 1) + extra_node->size);
   extra_node_btag->size = extra_node->size;
 
-  if (extra_node > tail_mem) tail_mem = extra_node; // EDGE CASE: split last block, update top of heap
+  if (extra_node > tail_mem)
+    tail_mem = extra_node; // (!) EDGE CASE: split last block, update top of heap
 
   node->size = size; // Taken
   node->is_free = 0; // redundant, just for readability
-  btag_t *node_btag = (btag_t*)((char*)(node + 1) + node->size);
+  btag_t *node_btag = (btag_t *)((char *)(node + 1) + node->size);
   node_btag->size = size;
 
   insert_free(extra_node);
@@ -201,7 +222,7 @@ void alloc_free_split(size_t size, node_t *node) {
 
 void *alloc_free(size_t size, node_t *node) {
   if (node->size >=
-      sizeof(node_t) + size + sizeof(btag_t) + 
+      sizeof(node_t) + size + sizeof(btag_t) +
           SPLIT_TRESHOLD) { // split !; // See `malloc_split` diagram Notability
     alloc_free_split(size, node);
   }
@@ -311,7 +332,7 @@ void free(void *ptr) {
   if (ptr == NULL)
     return;
 
-  node_t *node = (node_t*)ptr - 1;
+  node_t *node = (node_t *)ptr - 1;
   if (node->is_free)
     return; // (!) Already freed, do not double free
 
@@ -393,7 +414,7 @@ void *realloc(void *ptr, size_t size) {
     return NULL;
   }
 
-  node_t *node = (node_t*)ptr - 1; // !!! for `node` user already requested
+  node_t *node = (node_t *)ptr - 1; // !!! for `node` user already requested
                                     // `node->size` memory in the past
 
   if (size <= node->size)
