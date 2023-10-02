@@ -31,10 +31,20 @@ static node_t *tail_mem =
 // Declare functions
 // CONTRACT: all functions that contain `free` use a node from the free list;
 // all functions that contain `new` allocate memory from kernel using `sbrk`
+//
+
+// Request `sizeof(node_t) + size` bytes from kernel using `sbrk` sys. call to extend the heap, and allocate a new node of `size` bytes of data; gets called if `alloc_free` was not available to call (i.e.: there was no free block in the free list that could accomodate `size` bytes of data)
 void *alloc_new(size_t size);
+// Remove the free node `node` from the free list, and allocate `size` bytes into it; If possible, do splitting before allocating this free node, to reduce the internal memory fragmentation (see: `alloc_free_split`)
 void *alloc_free(size_t size, node_t *node);
+/*
+ * "insert" extra_node between node and next_node; the insert is implicit, as
+ * this happens in the memory / heap (implicit LL of contiguous blocks of memory)
+ */
 void alloc_free_split(size_t size, node_t *node);
+// Remove the `node` from the free list
 void remove_free(node_t *node);
+// Insert `node` to the head of the free list
 void insert_free(node_t *node);
 
 void insert_free(node_t *node) {
@@ -88,9 +98,6 @@ void *alloc_new(size_t size) {
 }
 
 void alloc_free_split(size_t size, node_t *node) {
-  // "insert" extra_node between node and extra_node; the insert is implicit, as
-  // this happens in the memory / heap (implicit LL of contiguous blocks of
-  // memory)
   node_t *extra_node = (node_t *)((char *)(node + 1) + size);
   node_t *next_node = node->next_mem;
 
@@ -102,7 +109,7 @@ void alloc_free_split(size_t size, node_t *node) {
   extra_node->prev_mem = node;
 
   // Update the new splitted sizes
-  extra_node->size = node->size - sizeof(node_t) - size; // Free
+  extra_node->size = node->size - sizeof(node_t) - size; 
   extra_node->is_free = 1;
   node->size = size; // Taken
   node->is_free = 0; // redundant, just for readability
@@ -178,7 +185,6 @@ void *calloc(size_t num, size_t size) {
  */
 void *malloc(size_t size) {
   // implement malloc!
-  //
 
   if (size <= 0) // don't allocate - @see
                  // http://www.cplusplus.com/reference/clibrary/cstdlib/malloc/
@@ -197,7 +203,7 @@ void *malloc(size_t size) {
   node_t *data = NULL;
   if (!walk) // We did not find a free node that can accomodate `size` bytes
     data = alloc_new(size);
-  else 
+  else
     data = alloc_free(size, walk);
   return data;
 }
@@ -232,10 +238,15 @@ void free(void *ptr) {
   node_t *prev_node = node->prev_mem;
   node_t *next_node = node->next_mem;
 
-  int is_prev_neigh_valid = (prev_node && prev_node -> is_free && ((char*)prev_node + sizeof(node_t) + prev_node->size) == (char *)node);
-  int is_next_neigh_valid = (next_node && next_node -> is_free && ((char*)node + sizeof(node_t) + node->size) == (char *)next_node);
+  int is_prev_neigh_valid =
+      (prev_node && prev_node->is_free &&
+       ((char *)prev_node + sizeof(node_t) + prev_node->size) == (char *)node);
+  int is_next_neigh_valid =
+      (next_node && next_node->is_free &&
+       ((char *)node + sizeof(node_t) + node->size) == (char *)next_node);
 
-  if (is_prev_neigh_valid && is_next_neigh_valid) { // coalesce all three blocks: prev, node and next
+  if (is_prev_neigh_valid &&
+      is_next_neigh_valid) { // coalesce all three blocks: prev, node and next
 
     remove_free(next_node);
     node_t *next_next_node = next_node->next_mem;
@@ -247,23 +258,30 @@ void free(void *ptr) {
       tail_mem = prev_node;
 
     prev_node->size += 2 * sizeof(node_t) + node->size + next_node->size;
-  } else if (is_prev_neigh_valid) // coalesce only prev_node and node into prev_node
-  {                         // TODO:
+  } else if (is_prev_neigh_valid) // coalesce only prev_node and node into
+                                  // prev_node
+  {                               
     prev_node->next_mem = next_node;
     if (next_node)
       next_node->prev_mem = prev_node;
     else
       tail_mem = prev_node;
     prev_node->size += sizeof(node_t) + node->size;
-  } else if (is_next_neigh_valid) { // coalesce node and node_next by making one free node in `node`, remove `node_next` from free list, as it will be combined in node from now on => `node_next` does not exist by itself anymore
+  } else if (is_next_neigh_valid) { // coalesce node and node_next by making one
+                                    // free node in `node`, remove `node_next`
+                                    // from free list, as it will be combined in
+                                    // node from now on => `node_next` does not
+                                    // exist by itself anymore
     remove_free(next_node);
     node_t *next_next_node = next_node->next_mem;
     node->next_mem = next_next_node;
-    if (next_next_node) next_next_node -> prev_mem = node;
-    else tail_mem = node;
+    if (next_next_node)
+      next_next_node->prev_mem = node;
+    else
+      tail_mem = node;
 
     node->is_free = 1;
-    node->size += sizeof(node_t) + next_node -> size;
+    node->size += sizeof(node_t) + next_node->size;
     insert_free(node);
   } else { // Coalescing was not possible -> just free `node`
     node->is_free = 1;
@@ -334,10 +352,11 @@ void *realloc(void *ptr, size_t size) {
     return ptr; // Trade-off: internal fragmentation so that we do not
                 // complicate it anymore
 
-  node_t *reallocd_node = malloc(size); 
-  memcpy(reallocd_node, ptr, node->size);
-  free(ptr); // See Edstem Question asked by me -> free `ptr` when memory move is done
-  return reallocd_node;
+  node_t *reallocd_data = malloc(size); // NOTE: this mem. addres hold real data, not the metada
+  memcpy(reallocd_data, ptr, node->size);
+  free(ptr); // See Edstem Question asked by me -> free `ptr` when memory move
+             // is done
+  return reallocd_data;
 }
 
 // ------------------ HELPER FUNCTIONS ------------------
