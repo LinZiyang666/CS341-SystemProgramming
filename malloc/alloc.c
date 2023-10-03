@@ -19,7 +19,6 @@ typedef struct node node_t;
 
 struct btag {
   size_t size;
-  size_t pad; // to make the struct 16-byte alligned
 };
 typedef struct btag btag_t;
 
@@ -112,11 +111,6 @@ node_t *get_prev_mem(node_t *node) {
     return NULL;
   else
     return prev_mem;
-}
-
-size_t alligned(size_t size) {
-   size_t x =  ((size + MULT - 1) & (-MULT));
-   return x;
 }
 
 void coalesce_three_blocks(node_t *node, node_t *prev_node, node_t *next_node) {
@@ -263,7 +257,7 @@ void *alloc_free(size_t size, node_t *node) {
  */
 void *calloc(size_t num, size_t size) {
   // implement calloc!
-  size_t nbytes = alligned(num * size);
+  size_t nbytes = num * size;
   char *ptr = malloc(nbytes);
   if (ptr == NULL)
     return NULL;
@@ -296,7 +290,6 @@ void *calloc(size_t num, size_t size) {
  */
 void *malloc(size_t size) {
   // implement malloc!
-  size = alligned(size);
 
   if (size <= 0) // don't allocate - @see
                  // http://www.cplusplus.com/reference/clibrary/cstdlib/malloc/
