@@ -23,7 +23,7 @@ struct btag {
 typedef struct btag btag_t;
 
 static size_t SPLIT_TRESHOLD =
-    1024 * 8; // Only split a block if it "is worth it" <=> diff. in prev v.s new
+    1024 * 16; // Only split a block if it "is worth it" <=> diff. in prev v.s new
           // size >= SPLIT_TRESHOLD; TODO: Play around w/ this value
 
 static node_t *head_free = NULL; // free list head
