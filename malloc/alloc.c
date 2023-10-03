@@ -22,6 +22,8 @@ typedef struct btag btag_t;
 
 
 static size_t meta_btag_size = sizeof(node_t) + sizeof(btag_t);
+static size_t node_size = sizeof(node_t);
+static size_t btag_size = sizeof(btag_t);
 
 static size_t SPLIT_TRESHOLD =
     1024 * 64; // Only split a block if it "is worth it" <=> diff. in prev v.s new
@@ -105,9 +107,9 @@ node_t *get_next_mem(node_t *node) {
 
 node_t *get_prev_mem(node_t *node) {
   char *p = (char *)node;
-  btag_t *start_btag_prev = (btag_t *)(p - sizeof(btag_t));
+  btag_t *start_btag_prev = (btag_t *)(p - btag_size);
   char *data_prev = (char *)start_btag_prev - start_btag_prev->size;
-  node_t *prev_mem = (node_t *)(data_prev - sizeof(node_t));
+  node_t *prev_mem = (node_t *)(data_prev - node_size);
   if (prev_mem < start_mem)
     return NULL;
   else
