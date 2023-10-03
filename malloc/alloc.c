@@ -7,8 +7,6 @@
 #include <string.h>
 #include <unistd.h>
 
-#define MULT 16 // for 16-byte allign
-
 struct node {
   size_t size;            // size of node
   char is_free;           // 1, if free, 0 else
@@ -22,8 +20,11 @@ struct btag {
 };
 typedef struct btag btag_t;
 
+
+static size_t meta_btag_size = sizeof(node_t) + sizeof(btag_t);
+
 static size_t SPLIT_TRESHOLD =
-    1024 * 128; // Only split a block if it "is worth it" <=> diff. in prev v.s new
+    1024 * 64; // Only split a block if it "is worth it" <=> diff. in prev v.s new
           // size >= SPLIT_TRESHOLD; TODO: Play around w/ this value
 
 static node_t *head_free = NULL; // free list head
@@ -95,7 +96,7 @@ void update_node_size(node_t *new_node_start, btag_t *new_btag, size_t new_size)
 
 node_t *get_next_mem(node_t *node) {
   char *p = (char *)node;
-  node_t *cand = (node_t *)(p + sizeof(node_t) + node->size + sizeof(btag_t));
+  node_t *cand = (node_t *)(p + meta_btag_size + node->size);
   if (cand > tail_mem)
     return NULL;
   else
@@ -120,7 +121,7 @@ void coalesce_three_blocks(node_t *node, node_t *prev_node, node_t *next_node) {
     tail_mem = prev_node;
 
   btag_t *next_node_btag = get_node_btag(next_node);
-  size_t new_size = 2 * sizeof(node_t) + 2 * sizeof(btag_t) + node->size + next_node->size;
+  size_t new_size = 2 * meta_btag_size + node->size + next_node->size;
   update_node_size(prev_node, next_node_btag, new_size);
 
 }
@@ -131,7 +132,7 @@ void coalesce_two_blocks_before(node_t *node, node_t *prev_node,
     tail_mem = prev_node;
 
    btag_t *node_btag = get_node_btag(node);
-   size_t new_size = sizeof(node_t) + sizeof(btag_t) + node->size;
+   size_t new_size = meta_btag_size + node->size;
   update_node_size(prev_node, node_btag, new_size);
 }
 
@@ -144,7 +145,7 @@ void coalesce_two_blocks_after(node_t *node, node_t *next_node) {
   node->is_free = 1;
 
   btag_t *next_node_btag = get_node_btag(next_node);
-  size_t new_size = sizeof(node_t) + sizeof(btag_t) + next_node->size;
+  size_t new_size = meta_btag_size + next_node->size;
   update_node_size(node, next_node_btag, new_size);
   insert_free(node);
 }
@@ -182,7 +183,7 @@ void remove_free(node_t *node) {
 }
 
 void *alloc_new(size_t size) {
-  node_t *node = sbrk(sizeof(node_t) + size + sizeof(btag_t));
+  node_t *node = sbrk(meta_btag_size + size);
   if (node == (void *)-1)
     return NULL;
   else if (!start_mem) // get bottom of heap
@@ -202,10 +203,10 @@ void *alloc_new(size_t size) {
 
 void alloc_free_split(size_t size, node_t *node) {
   node_t *extra_node =
-      (node_t *)((char *)node + sizeof(node_t) + size + sizeof(btag_t));
+      (node_t *)((char *)node + meta_btag_size + size);
 
   // Update the new splitted sizes
-  extra_node->size = node->size - sizeof(node_t) - size - sizeof(btag_t);
+  extra_node->size = node->size - meta_btag_size - size;
   extra_node->is_free = 1;
   btag_t *extra_node_btag =
       (btag_t *)((char *)(extra_node + 1) + extra_node->size);
@@ -224,7 +225,7 @@ void alloc_free_split(size_t size, node_t *node) {
 
 void *alloc_free(size_t size, node_t *node) {
   if (node->size >=
-      sizeof(node_t) + size + sizeof(btag_t) +
+      meta_btag_size + size +
           SPLIT_TRESHOLD) { // split !; // See `malloc_split` diagram Notability
     alloc_free_split(size, node);
   }
