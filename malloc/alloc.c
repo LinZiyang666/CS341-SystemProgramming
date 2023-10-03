@@ -7,6 +7,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#define MULT 16 // for 16-byte allign
+
 struct node {
   size_t size;            // size of node
   char is_free;           // 1, if free, 0 else
@@ -17,6 +19,7 @@ typedef struct node node_t;
 
 struct btag {
   size_t size;
+  size_t pad; // to make the struct 16-byte alligned
 };
 typedef struct btag btag_t;
 
@@ -111,6 +114,11 @@ node_t *get_prev_mem(node_t *node) {
     return prev_mem;
 }
 
+size_t alligned(size_t size) {
+   size_t x =  ((size + MULT - 1) & (-MULT));
+   return x;
+}
+
 void coalesce_three_blocks(node_t *node, node_t *prev_node, node_t *next_node) {
   remove_free(next_node);
   node_t *next_next_node = get_next_mem(next_node);
@@ -142,7 +150,7 @@ void coalesce_two_blocks_after(node_t *node, node_t *next_node) {
   node->is_free = 1;
 
   btag_t *next_node_btag = get_node_btag(next_node);
-  size_t new_size = sizeof(node_t) + sizeof(btag_t) + next_node->size; 
+  size_t new_size = sizeof(node_t) + sizeof(btag_t) + next_node->size;
   update_node_size(node, next_node_btag, new_size);
   insert_free(node);
 }
@@ -255,7 +263,7 @@ void *alloc_free(size_t size, node_t *node) {
  */
 void *calloc(size_t num, size_t size) {
   // implement calloc!
-  size_t nbytes = num * size;
+  size_t nbytes = alligned(num * size);
   char *ptr = malloc(nbytes);
   if (ptr == NULL)
     return NULL;
@@ -288,6 +296,7 @@ void *calloc(size_t num, size_t size) {
  */
 void *malloc(size_t size) {
   // implement malloc!
+  size = alligned(size);
 
   if (size <= 0) // don't allocate - @see
                  // http://www.cplusplus.com/reference/clibrary/cstdlib/malloc/
