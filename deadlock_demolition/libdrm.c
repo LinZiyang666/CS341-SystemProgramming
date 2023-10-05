@@ -40,15 +40,13 @@ drm_t *drm_init()
 {
     /* Your code here */
     drm_t *drm = (drm_t *)malloc(sizeof(drm_t));
-    pthread_mutex_init(&m_global, NULL);
+    pthread_mutex_init(&drm->m, NULL);
 
-    pthread_mutex_lock(&m_global);
   
+    pthread_mutex_lock(&m_global);
     if (!g) // lazy init
         g = shallow_graph_create();
-
     graph_add_vertex(g, drm);
-
     pthread_mutex_unlock(&m_global);
 
     return drm;
