@@ -130,6 +130,5 @@ void drm_destroy(drm_t *drm)
     graph_remove_vertex(g, drm);
     pthread_mutex_destroy(&drm->m);
     free(drm);
-    pthread_mutex_destroy(&m_global);
     return;
 }

@@ -16,8 +16,6 @@ int test2 = 0;
 drm_t *drm1 = NULL;
 drm_t *drm2 = NULL;
 const size_t num_threads = 2;
-static pthread_mutex_t m1 = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t m2 = PTHREAD_MUTEX_INITIALIZER;
 
 void *myfunc1(void *tid)
 {
@@ -86,8 +84,6 @@ int main()
     printf("test2: %d\n", test2); // exp. 10
     drm_destroy(drm1);
     drm_destroy(drm2);
-    pthread_mutex_destroy(&m1);
-    pthread_mutex_destroy(&m2);
     pthread_exit(NULL);
 
     // Expected output (program's behavior)
