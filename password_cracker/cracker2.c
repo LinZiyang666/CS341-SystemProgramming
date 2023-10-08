@@ -105,7 +105,7 @@ void *solve_task(void *arg)
 
         v2_print_thread_start(tid, curr_task->username, start_index, pwd);
 
-        for (long c = 1; c < count; ++c)
+        for (long c = 0; c < count; ++c)
         {
             hashed = crypt_r(pwd, "xx", &cdata);
             hashes++;
