@@ -118,7 +118,8 @@ void *solve_task(void *arg) {
         }
 
         free(pwd); 
-        task_destroy(tsk);        
+        if (tsk)
+            task_destroy(tsk);        
     }
     
     queue_push(Q, NULL);  // After dequeing: If the next value is the sentinel, push it back to indicate the queue is still empty.
@@ -158,8 +159,8 @@ int start(size_t thread_count) {
     for (size_t i = 0; i < thread_count; ++i) {
         pthread_create(tids + i, NULL, solve_task, (void *)(i + 1)); // tids are 1-indexed !
         if (i + 1 == thread_count) // last thread has been created
-            for (size_t j = 1; j < thread_count; ++j) //  Every thread must join with the main thread!
-                pthread_join(tids[i], NULL);
+            for (size_t j = 0; j < thread_count; ++j) //  Every thread must join with the main thread!
+                pthread_join(tids[j], NULL);
     }
 
 
