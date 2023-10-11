@@ -48,9 +48,9 @@ typedef struct {
  * table.
  *
  * Questions to think about:
- * - How big is a page directory? How big is a page directory entry?
+ * - How big is a page directory? How big is a page directory entry? ->  2^12 = 4KiB PDE; PDE entry = 32bits = 4bytes
  * - How many entries can we store in the page directory? How many bits will
- *   we need to index a page directory entry?
+ *   we need to index a page directory entry? -> 2^12 / 2^2 = 2^10 entries / page directory; we need 10 bits to index a PDE
  */
 typedef struct {
     page_directory_entry entries[NUM_ENTRIES];
@@ -80,9 +80,9 @@ typedef struct {
  * of page table entries. Each page table entry will point to a memory frame.
  *
  * Questions to think about:
- * - How big is a page table? How big is a page table entry?
+ * - How big is a page table? How big is a page table entry? -> 4 KiB = 2^12 bytes; 32 bits = 4bytes / entry
  * - How many entries can we store in the page table? How many bits will we
- *   need to index a page table entry?
+ *   need to index a page table entry? -> 2^12 / 2^2 = 2^10 entries / Page Table; 10 bits needed to index PTEs
  */
 typedef struct {
     page_table_entry entries[NUM_ENTRIES];
