@@ -19,9 +19,9 @@
 #define NUM_PAGE_TABLES 2
 #define NUM_OFFSET_BITS 12
 #define NUM_VPN_BITS ((VIRTUAL_ADDR_SPACE - NUM_OFFSET_BITS) / NUM_PAGE_TABLES)
-#define PAGE_SIZE (1 << NUM_OFFSET_BITS)
+#define PAGE_SIZE (1 << NUM_OFFSET_BITS) // 2^12 = 4KiB
 #define FRAME_SIZE (PAGE_SIZE)
-#define NUM_ENTRIES (PAGE_SIZE / sizeof(page_directory_entry))
+#define NUM_ENTRIES (PAGE_SIZE / sizeof(page_directory_entry)) // 2^12 / 4 bytes = 2^10 PTEs / PDEs
 
 /**
  * The layout of an entry in the page directory. For details on what each
@@ -95,7 +95,7 @@ typedef struct {
  */
 
 /*
- * Page base address, bits 12 through 32 -
+ * Page base address, bits 12 through 32 - 32-bit machine w/ 2^12 bytes per page entry => 2^32 / 2^12 = 2^20
  *
  * Specifies the physical address of the first byte of a 4-KByte page.
  * The bits in this field are interpreted as the 20 mostsignificant bits
