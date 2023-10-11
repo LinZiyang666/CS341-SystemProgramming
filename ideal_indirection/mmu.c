@@ -51,7 +51,7 @@ void mmu_rw_from_virtual_address(mmu *this, addr32 virtual_address,
         }
     }
 
-    addr32 base_virtual_addr_tlb = virtual_address & MSB_20; // The virtual address with the offset removed.
+    addr32 base_virtual_addr_tlb = (virtual_address & MSB_20) >> NUM_OFFSET_BITS; // The virtual address with the offset removed.
     page_table_entry *pte = tlb_get_pte(&this->tlb, base_virtual_addr_tlb); // Check the TLB for the page table entry
 
     if (!pte) { // if it is not in TLB
@@ -59,7 +59,7 @@ void mmu_rw_from_virtual_address(mmu *this, addr32 virtual_address,
     mmu_tlb_miss(this); // Raise a TLB miss
     
     page_directory *pd = this->page_directories[pid];  // Get the page directory for the specific process; each process has diff. Page Directories
-    addr32 pde_id = (virtual_address) >> (2 + VIRTUAL_ADDR_SPACE - NUM_OFFSET_BITS); // ASK! Lab
+    addr32 pde_id = (virtual_address >> 22); // TODO: ASK! Lab
     page_directory_entry *pde = &pd->entries[pde_id]; // get the page directory entry
 
     if (!pde->present) // not present in memory
@@ -76,6 +76,7 @@ void mmu_rw_from_virtual_address(mmu *this, addr32 virtual_address,
     }
 
     page_table *pt = (page_table *)get_system_pointer_from_pde(pde); // Get the page table using the PDE
+    assert(((virtual_address >> NUM_OFFSET_BITS) & LSB_10) == ((virtual_address & 0x003FF000) >> NUM_OFFSET_BITS));
     addr32 pt_id = (virtual_address >> NUM_OFFSET_BITS) & LSB_10; 
     pte = &pt->entries[pt_id]; // Get the page table entry from the page table
 
@@ -108,8 +109,9 @@ void mmu_rw_from_virtual_address(mmu *this, addr32 virtual_address,
      //TODO: Ask lab
      // Use the page table entry’s base address and the offset of the virtual address to compute the physical address. 
      addr32 offset = (virtual_address & LSB_12);
-     addr32 phys_addr = ((pte->base_addr << NUM_OFFSET_BITS) + offset);
-     void *phys_addr_ptr = get_system_pointer_from_address(phys_addr); // Get a physical pointer from this address
+    //  addr32 phys_addr = ((pte->base_addr << NUM_OFFSET_BITS) + offset);
+    //  void *phys_addr_ptr = get_system_pointer_from_address(phys_addr); // Get a physical pointer from this address
+     void *phys_addr_ptr = get_system_pointer_from_pte(pte) + offset;
 
      if (write)
          memcpy(phys_addr_ptr, buffer, num_bytes);
