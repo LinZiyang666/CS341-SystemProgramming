@@ -32,6 +32,25 @@ void mmu_rw_from_virtual_address(mmu *this, addr32 virtual_address,
         return;
     }
 
+    if (write) // check write permission
+    {
+        vm_segmentation *seg = find_segment(this->segmentations[pid], virtual_address);
+        int allow_write = seg->permissions & WRITE;
+        if (!allow_write) { //  If not, raise a segfault and return
+            mmu_raise_segmentation_fault(this);
+            return;
+        }
+    }
+    else { // check read permission
+
+        vm_segmentation *seg = find_segment(this->segmentations[pid], virtual_address);
+        int allow_read = seg->permissions & READ;
+        if (!allow_read) { //  If not, raise a segfault and return
+            mmu_raise_segmentation_fault(this);
+            return;
+        }
+    }
+
     addr32 base_virtual_addr_tlb = virtual_address & MSB_20; // The virtual address with the offset removed.
     page_table_entry *pte = tlb_get_pte(&this->tlb, base_virtual_addr_tlb); // Check the TLB for the page table entry
 
@@ -52,7 +71,7 @@ void mmu_rw_from_virtual_address(mmu *this, addr32 virtual_address,
         pde->user_supervisor = 0; // supervisor priviliges
 
         // ASK: do we have to?
-        read_page_from_disk((page_table_entry *)pde); //  page table entry points to a frame of memory that has been swapped to disk, and the page table entry is now pointing to a valid physical memory frame
+        // read_page_from_disk((page_table_entry *)pde); //  page table entry points to a frame of memory that has been swapped to disk, and the page table entry is now pointing to a valid physical memory frame
     }
 
     page_table *pt = (page_table *)get_system_pointer_from_pde(pde); // Get the page table using the PDE
@@ -78,12 +97,12 @@ void mmu_rw_from_virtual_address(mmu *this, addr32 virtual_address,
 
     //TODO: !
     // Check that the user has permission to perform the read or write operation. If not, raise a segfault and return
-    if (write) {
-        if (!pte->read_write) {
-            mmu_raise_segmentation_fault(this);
-            return;
-        }
-    }
+    // if (write) {
+    //     if (!pte->read_write) {
+    //         mmu_raise_segmentation_fault(this);
+    //         return;
+    //     }
+    // }
      
      //TODO: Ask lab
      // Use the page table entry’s base address and the offset of the virtual address to compute the physical address. 
