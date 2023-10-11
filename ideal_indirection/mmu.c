@@ -109,9 +109,12 @@ void mmu_rw_from_virtual_address(mmu *this, addr32 virtual_address,
      //TODO: Ask lab
      // Use the page table entry’s base address and the offset of the virtual address to compute the physical address. 
      addr32 offset = (virtual_address & LSB_12);
-    //  addr32 phys_addr = ((pte->base_addr << NUM_OFFSET_BITS) + offset);
-    //  void *phys_addr_ptr = get_system_pointer_from_address(phys_addr); // Get a physical pointer from this address
-     void *phys_addr_ptr = get_system_pointer_from_pte(pte) + offset;
+    // Before
+     addr32 phys_addr = ((pte->base_addr << NUM_OFFSET_BITS) + offset);
+     void *phys_addr_ptr = get_system_pointer_from_address(phys_addr); // Get a physical pointer from this address
+     
+     // After
+    //  void *phys_addr_ptr = get_system_pointer_from_pte(pte) + offset;
 
      if (write)
          memcpy(phys_addr_ptr, buffer, num_bytes);
