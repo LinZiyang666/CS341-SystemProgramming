@@ -9,6 +9,10 @@
 #include <string.h>
 #include <unistd.h>
 
+#define MSB_20 0xFFFFF000
+#define LSB_10 ((1 << 10) - 1)
+#define LSB_12 ((1 << 12) - 1)
+
 mmu *mmu_create() {
     mmu *my_mmu = calloc(1, sizeof(mmu));
     my_mmu->tlb = tlb_create();
@@ -21,6 +25,78 @@ void mmu_read_from_virtual_address(mmu *this, addr32 virtual_address,
     assert(pid < MAX_PROCESS_ID);
     assert(num_bytes + (virtual_address % PAGE_SIZE) <= PAGE_SIZE);
     // TODO: Implement me!
+
+    if (pid != this->curr_pid) // context switch
+    {
+        tlb_flush(&this->tlb);
+        this->curr_pid = pid;
+    }
+    if (!address_in_segmentations(this->segmentations[pid], virtual_address)) { // Make sure that the address is in one of the segmentations.
+        mmu_raise_segmentation_fault(this); //  If not, raise a segfault and return
+        return;
+    }
+
+    addr32 base_virtual_addr_tlb = virtual_address & MSB_20; // The virtual address with the offset removed.
+    page_table_entry *pte = tlb_get_pte(&this->tlb, base_virtual_addr_tlb); // Check the TLB for the page table entry
+
+    if (!pte) { // if it is not in TLB
+    mmu_tlb_miss(&this->tlb); // Raise a TLB miss
+    
+    page_directory *pd = this->page_directories[pid];  // Get the page directory for the specific process; each process has diff. Page Directories
+    addr32 pde_id = (virtual_address) >> (VIRTUAL_ADDR_SPACE - NUM_OFFSET_BITS); // ASK! Lab
+    page_directory_entry *pde = &pd->entries[pde_id]; // get the page directory entry
+
+    if (!pde->present) // not present in memory
+    {
+        mmu_raise_page_fault(&this);
+        addr32 frame_addr = (ask_kernel_for_frame(NULL) >> NUM_OFFSET_BITS); // ask_kernel_for_frame  returns 4KiB = 2^12 alligned bytes => remove LSB 12 0s
+        pde->base_addr = frame_addr; // 20bits; !!! -> where pde points to (to the frame memory addr)
+        pde->present = 1;
+        pde->read_write = 1;
+        pde->user_supervisor = 0; // supervisor priviliges
+
+        // ASK: do we have to?
+        read_page_from_disk((page_table_entry *)pde); //  page table entry points to a frame of memory that has been swapped to disk, and the page table entry is now pointing to a valid physical memory frame
+    }
+
+    page_table *pt = (page_table *)get_system_pointer_from_pde(pde); // Get the page table using the PDE
+    addr32 pt_id = (virtual_address >> NUM_OFFSET_BITS) & LSB_10; 
+    page_table_entry *pte = &pt->entries[pt_id]; // Get the page table entry from the page table
+
+    // Idea: Do it at the end, as we have to add it to TLB anyways
+    // tlb_add_pte(&this->tlb, base_virtual_addr_tlb, pte); // Add the entry to the TLB
+    }
+
+
+    if (!pte->present) { // If the page table entry is not present in memory:
+        mmu_raise_page_fault(this);
+
+                                // The page table entry that will point to this frame.
+        addr32 frame_addr = (ask_kernel_for_frame(pte) >> NUM_OFFSET_BITS); // ask_kernel_for_frame  returns 4KiB = 2^12 alligned bytes => remove LSB 12 0s
+        pte->base_addr = frame_addr; // 20bits; !!! -> where pde points to (to the frame memory addr)
+        pte->present = 1;
+        pte->read_write = 1;
+        pte->user_supervisor = 1; // user priviliges
+        read_page_from_disk(pte); //  page table entry points to a frame of memory that has been swapped to disk, and the page table entry is now pointing to a valid physical memory frame
+    }
+
+
+    //TODO: Ask lab
+    // Check that the user has permission to perform the read or write operation. If not, raise a segfault and return
+    // read_write flag can be 0 = R/O or 0 = WR
+    
+     
+     //TODO: Ask lab
+     // Use the page table entry’s base address and the offset of the virtual address to compute the physical address. 
+     addr32 offset = (virtual_address && LSB_12);
+     addr32 phys_addr = ((pte->base_addr << NUM_OFFSET_BITS) + offset);
+     void *phys_addr_ptr = get_system_pointer_from_address(phys_addr); // Get a physical pointer from this address
+
+     // perform read op
+     memcpy(buffer, phys_addr_ptr, num_bytes);
+
+    tlb_add_pte(&this->tlb, base_virtual_addr_tlb, pte); // Add the entry to the TLB
+    pte->accessed = 1; //Page Table was read from
 }
 
 void mmu_write_to_virtual_address(mmu *this, addr32 virtual_address, size_t pid,
@@ -29,6 +105,12 @@ void mmu_write_to_virtual_address(mmu *this, addr32 virtual_address, size_t pid,
     assert(pid < MAX_PROCESS_ID);
     assert(num_bytes + (virtual_address % PAGE_SIZE) <= PAGE_SIZE);
     // TODO: Implement me!
+
+
+    //TODO: !
+    // if (!pte->read_write) {segfault(); return;}
+    // pte->accessed = 1; //Page Table was read from
+    //pte->dirty = 1; //Page Table was written to
 }
 
 void mmu_tlb_miss(mmu *this) {
