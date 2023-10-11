@@ -221,7 +221,7 @@ void page_fault_with_swap(mmu *test_mmu) {
     char *test_string = "hello world";
 
     // write the test string to the page.
-    mmu_write_to_virtual_address(test_mmu, virtual_address, TEST_PID,
+     mmu_write_to_virtual_address(test_mmu, virtual_address, TEST_PID,
                                  test_string, strlen(test_string) + 1);
     // create a bunch of processes so that the page gets kicked out
     // each process creates 4 pages (page directory, page table, and 2 frames)

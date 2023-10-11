@@ -55,10 +55,11 @@ void mmu_rw_from_virtual_address(mmu *this, addr32 virtual_address,
     page_table_entry *pte = tlb_get_pte(&this->tlb, base_virtual_addr_tlb); // Check the TLB for the page table entry
 
     if (!pte) { // if it is not in TLB
+
     mmu_tlb_miss(this); // Raise a TLB miss
     
     page_directory *pd = this->page_directories[pid];  // Get the page directory for the specific process; each process has diff. Page Directories
-    addr32 pde_id = (virtual_address) >> (VIRTUAL_ADDR_SPACE - NUM_OFFSET_BITS); // ASK! Lab
+    addr32 pde_id = (virtual_address) >> (2 + VIRTUAL_ADDR_SPACE - NUM_OFFSET_BITS); // ASK! Lab
     page_directory_entry *pde = &pd->entries[pde_id]; // get the page directory entry
 
     if (!pde->present) // not present in memory
@@ -66,12 +67,12 @@ void mmu_rw_from_virtual_address(mmu *this, addr32 virtual_address,
         mmu_raise_page_fault(this);
         addr32 frame_addr = (ask_kernel_for_frame(NULL) >> NUM_OFFSET_BITS); // ask_kernel_for_frame  returns 4KiB = 2^12 alligned bytes => remove LSB 12 0s
         pde->base_addr = frame_addr; // 20bits; !!! -> where pde points to (to the frame memory addr)
+        // ASK: do we have to?
+        read_page_from_disk((page_table_entry *)pde); //  page table entry points to a frame of memory that has been swapped to disk, and the page table entry is now pointing to a valid physical memory frame
         pde->present = 1;
         pde->read_write = 1;
         pde->user_supervisor = 0; // supervisor priviliges
 
-        // ASK: do we have to?
-        // read_page_from_disk((page_table_entry *)pde); //  page table entry points to a frame of memory that has been swapped to disk, and the page table entry is now pointing to a valid physical memory frame
     }
 
     page_table *pt = (page_table *)get_system_pointer_from_pde(pde); // Get the page table using the PDE
@@ -89,10 +90,10 @@ void mmu_rw_from_virtual_address(mmu *this, addr32 virtual_address,
                                 // The page table entry that will point to this frame.
         addr32 frame_addr = (ask_kernel_for_frame(pte) >> NUM_OFFSET_BITS); // ask_kernel_for_frame  returns 4KiB = 2^12 alligned bytes => remove LSB 12 0s
         pte->base_addr = frame_addr; // 20bits; !!! -> where pde points to (to the frame memory addr)
+        read_page_from_disk(pte); //  page table entry points to a frame of memory that has been swapped to disk, and the page table entry is now pointing to a valid physical memory frame
         pte->present = 1;
         pte->read_write = 1;
         pte->user_supervisor = 1; // user priviliges
-        read_page_from_disk(pte); //  page table entry points to a frame of memory that has been swapped to disk, and the page table entry is now pointing to a valid physical memory frame
     }
 
     //TODO: !
