@@ -13,6 +13,9 @@
 #include <unistd.h>
 #include <time.h>
 
+#define TRUE 1
+#define FALSE 0
+
 // The graph and vector classes are not thread-safe! ->
 // a.) rule_lock, rule_cv for `rules`
 // b.) graph_lock, graph_cv for `g`
@@ -46,22 +49,22 @@ int tricolor(dictionary *mp, void *target);
 void get_rules_in_order(vector *targets);
 void get_rules(dictionary *cnt, vector *targets);
 
-// Method that is called when thread is created
-void *solve(void *arg);
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ //
+// Multi-threaded methods
 
 /* Return an integer depicitng the status of running the current rule
   -1: error, don't run, mark failed
   0: dependencies not finished yet
   1: all deps are satisfied, run IMMEDIATELY
-  2: should not run, don't mark as satisfied
-  3: rule is already done previously
+  2: should not run, don't mark as satisfied -> Basically, there is no need to satisfy a rule if it isn’t necessary to satisfy the goal rules or if we already know that all the goal rules it might satisfy are doomed to fail due to cycles
+  3: rule was already satisfied & run previously
 */
 int run_status(void *target)
 {
     rule_t *rule = (rule_t *)graph_get_vertex_value(g, target); // access MakeFile rule from graph
 
-    if (rule->state != 0)                                       // already done previously
-        return 3;                                               //  Once a rule is satisfied, it shouldn’t be run again.
+    if (rule->state != 0) // already done previously
+        return 3;         //  Once a rule is satisfied, it shouldn’t be run again.
 
     vector *dependencies = graph_neighbors(g, target);
     size_t num_dependencies = vector_size(dependencies);
@@ -101,15 +104,17 @@ int run_status(void *target)
             }
 
             vector_destroy(dependencies);
-            return 2; //don't run TODO: ask lab
-        } 
-        else { // `target` not a file -> check if all dependencies succeeded (for any dependency: dependency->state = 1), if true -> 1,
-        //  else propagate dependency's state by returning it: 0: if dependency not met yet, -1: if dependency had error
-        
+            return 2; // don't run TODO: ask lab
+        }
+        else
+        {   // `target` not a file -> check if all dependencies succeeded (for any dependency: dependency->state = 1), if true -> 1,
+            //  else propagate dependency's state by returning it: 0: if dependency not met yet, -1: if dependency had error
+
             pthread_mutex_lock(&g_lock); // graph class is not thread safe -> lock mutex to access its members
             // We now have to lock the mutex, as we access dep->state, to ensure that no other thread modifies it while we read it
 
-            for (size_t i = 0; i < num_dependencies; ++i) {
+            for (size_t i = 0; i < num_dependencies; ++i)
+            {
                 char *dependency = vector_get(dependencies, i);
                 rule_t *sub_rule = (rule_t *)graph_get_vertex_value(g, dependency);
                 if (sub_rule->state != 1) // dependency not succeeded yet
@@ -123,7 +128,7 @@ int run_status(void *target)
             // All subrules / dependencies suceeded :D  => run current rule immediately
             pthread_mutex_unlock(&g_lock);
             vector_destroy(dependencies);
-            return 1;
+            return 1; //  A rule can be satisfied if and only if all of rules that it depends on have been satisfied and none of them have failed 
         }
     }
     else
@@ -137,6 +142,89 @@ int run_status(void *target)
     }
 }
 
+// Method that is called when thread is created
+void *solve(void *arg)
+{
+
+    while (TRUE)
+    {                                   // Solves artificially created spurious wakeups
+        pthread_mutex_lock(&rule_lock); // The vector class is not thread-safe -> lock mutex to access the rules
+        size_t num_rules = vector_size(&rule_lock);
+        if (num_rules > 0)
+        {
+
+            for (size_t i = 0; i < num_rules; ++i) // TODO: Check if we can do it without for loop
+            {
+                void *target = vector_get(rules, i);
+                int stat_code = run_status(target);
+                rule_t *rule = (rule_t *)graph_get_vertex_value(g, target); // access MakeFile rule from graph
+
+                if (stat_code == 1)
+                { // run imm.
+
+                    vector_erase(rules, i); // remove rule
+                    vector *commands = rule->commands;
+                    int st = rule->state;
+                    pthread_mutex_unlock(&rule_lock);
+
+                    size_t num_cmds = vector_size(commands);
+                    for (size_t c = 0; c < num_cmds; ++c)
+                    {
+                        char *cmd = (char *)vector_get(commands, i);
+                        if (system(cmd)) // use system() to run the commands associated with each rule; check if any such `cmd` failed
+                        {
+                            st = -1;
+                            break;
+                        }
+                    }
+
+                    // Change state, and ensure thread-safeness by locking graph_lock -> no one else accesses the rule () while we modify it
+                    pthread_mutex_lock(&g_lock);
+                    rule->state = st;
+                    pthread_cond_broadcast(&rule_cv); // let the other rules know about hte change state in this rule; if there are instr. that depend on this rule, they can continue
+                    pthread_mutex_unlock(&g_lock);
+                    break;
+                }
+                else if (stat_code == 2 || stat_code == -1) // either marked as satisified (and not run) OR error; TODO: check correctness ?
+                {
+
+                    vector_erase(rules, i); // remove rule
+                    int st = rule->state;
+                    pthread_mutex_unlock(&rule_lock);
+
+                    pthread_mutex_lock(&g_lock);
+                    if (stat_code == -1)
+                        rule->state = -1;
+                    else
+                        rule->state = 1;              // parent should not run & marked as satisfied, so don't run this dependency of the parent either, just mark it as done
+                    pthread_cond_broadcast(&rule_cv); // let the other rules know about hte change state in this rule; if there are instr. that depend on this rule, they can continue
+                    pthread_mutex_unlock(&g_lock);
+                    break;
+                }
+                else if (stat_code == 3) // already satisfied & ran previously
+                {
+                    vector_erase(rules, i); // remove rule
+                    pthred_mutex_unlock(&rule_lock);
+                    break;
+                }
+                else if (stat_code == 0 && i + 1 == num_rules) // last rule in the graph & deps not finished yet => WAIT (on cv)
+                {
+                    pthread_cont_wait(&rule_cv); // unlock rule_lock, WAIT until signaled, re-lock rule_lock
+                    pthread_mutex_unlock(&rule_lock);
+                    break;
+                }
+            }
+        }
+        else
+        {
+            pthread_mutex_unlock(&rule_lock);
+            break;
+        }
+    }
+}
+
+// Multi-threaded methods END
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ //
 
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ //
 // Cycle methods
