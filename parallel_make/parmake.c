@@ -10,9 +10,13 @@
 
 int has_cycle(void *target);
 int tricolor(dictionary *mp, void *target);
+
 void get_rules_in_order(vector *targets);
+void get_rules(dictionary *cnt, vector *targets);
+
+
 // Method that is called when thread is created
-void *solve(void *arg); 
+void* solve(void *arg); 
 
 // The graph and vector classes are not thread-safe! ->
 // a.) rule_lock, rule_cv for `rules`
@@ -25,6 +29,8 @@ pthread_mutex_t rule_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 
 
+/* Helper Functions */
+
 // Allocates a string -> int dictionary and returns it
 dictionary *dictionary_init() {
     dictionary *mp = string_to_int_dictionary_create();
@@ -36,6 +42,9 @@ dictionary *dictionary_init() {
     }
     return mp;
 }
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ // 
+// Cycle methods
 
 // 1, if graph has cycle starting traversal from `target`, else 0
 int has_cycle(void *target) {
@@ -84,6 +93,41 @@ int tricolor (dictionary *mp, void *target) {
 // White (0) -> !seen node
 // Gray (1) -> have been discovered but that the algorithm is not done with yet; Frontier between White and Black
 // Black (2) -> node that algorithm is done with.
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ // 
+// Rules methods
+
+void get_rules_in_order(vector *targets) {
+    dictionary *cnt = dictionary_init();
+    get_rules(cnt, targets);
+    dictionary_destroy(cnt);
+}
+
+// Perform a DFS and enque the nodes when you get back from recursive call (i.e: target is enqueued AFTER all it's dependencies have been enqueued)
+// Each entry in `cnt` dictionary can be in one of the following states:
+// 0 -> !visited yet
+// 1 -> visited
+void get_rules (dictionary *cnt, vector *targets) {
+    size_t num_targets = vector_size(targets);
+    for (size_t i = 0; i < num_targets; ++i) {
+        void *target = vector_get(targets, i);
+        void *dependencies = graph_neighbors(g, target);
+        get_rules(cnt, dependencies); // DFS
+
+        int seen = (*(int*)dictionary_get(g, target));
+        if (!seen) {
+            dictionary_set(cnt, target, 1); // mark as seen
+            vector_push_back(rules, target); // enqueue
+        }
+        vector_destroy(dependencies);
+    }
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ // 
+
+
+
+
 
 int parmake(char *makefile, size_t num_threads, char **targets)
 {
