@@ -8,7 +8,8 @@
 #include "parmake.h"
 #include "parser.h"
 
-int has_cycle(char *rule);
+int has_cycle(void *target);
+int tricolor(dictionary *mp, void *target);
 void get_rules_in_order(vector *targets);
 // Method that is called when thread is created
 void *solve(void *arg); 
@@ -23,6 +24,62 @@ pthread_cond_t g_cv = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t rule_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 
+
+// Allocates a string -> int dictionary and returns it
+dictionary *dictionary_init() {
+    dictionary *mp = string_to_int_dictionary_create();
+    vector *nodes = graph_vertices(g);
+    size_t num_nodes = vector_size(nodes);
+    for (size_t i = 0; i < num_nodes; ++i) {
+        int val = 0; 
+        dictionary_set(mp, vector_get(nodes, i), &val);
+    }
+    return mp;
+}
+
+// 1, if graph has cycle starting traversal from `target`, else 0
+int has_cycle(void *target) {
+    dictionary *mp = dictionary_init();
+    int isCycle = tricolor(mp, target); 
+    dictionary_destroy(mp); //TODO: LAB - Ask if this hsould be destroyed.
+    return isCycle;
+}
+
+/*
+Source: https://www.cs.cornell.edu/courses/cs2112/2012sp/lectures/lec24/lec24-12sp.html
+Performs Tricolor algorithm to detect cycle
+Each entry in the `mp` dictionary is in one of the following 3 states:
+mp[key] = 0 -> (White) Not visited yet 
+mp[key] = 1 -> (Grey) in progress
+mp[key] = 2 -> (Black) finished
+Returns: 1, if cycle found, else 0
+*/
+int tricolor (dictionary *mp, void *target) {
+
+    int *value = (int *)dictionary_get(mp, target);
+    if (*value == 1) // got to a Grey node once again => CYCLE
+        return 1; 
+    else if (*value == 2) // `target` is Black -> done, no cycle
+        return 0; 
+    
+    // mark as `in progress` (Gray)
+    dictionary_set(mp, target, 1);
+    vector *children = graph_neighbors(g, target); 
+    size_t num_children = vector_size(children);
+
+    for (size_t i = 0; i < num_children; ++i) {
+        int isCycle = tricolor(mp, vector_get(children, i));
+        if (isCycle) {
+            vector_destroy(children);
+            return isCycle;
+        }
+    }
+    
+    //mark as `finished` (Black)
+    dictionary_set(mp, target, 2);
+    vector_destroy(children);
+    return 0; // IF NONE of children produced cycle -> no cycle
+}
 // Detect graph cycle w/ "Tricolor algorithm" using `dictionary`
 // White (0) -> !seen node
 // Gray (1) -> have been discovered but that the algorithm is not done with yet; Frontier between White and Black
@@ -39,7 +96,7 @@ int parmake(char *makefile, size_t num_threads, char **targets)
     for (size_t i = 0; i < ngoals; ++i) {
         char* goal_rule = vector_get(goal_rules, i);
         if (has_cycle(goal_rule)) {
-            print_cycle_failure(goal_rule);
+            print_cycle_failure((char *)goal_rule);
             isCycle = 1;
         }
     }
