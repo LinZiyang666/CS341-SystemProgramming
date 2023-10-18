@@ -34,7 +34,7 @@ ALREADY_DONE(3): rule was already satisfied & run previously
 #define TRUE 1
 #define FALSE 0
 
-// For the readability of rule's states;
+// Error codes for rules' states
 #define DEFAULT 0
 #define VALID 1
 #define INVALID -1
@@ -325,9 +325,6 @@ void get_rules_in_order(vector *targets)
 }
 
 // Perform a DFS and enque the nodes when you get back from recursive call (i.e: target is enqueued AFTER all it's dependencies have been enqueued)
-// Each entry in `cnt` dictionary can be in one of the following states:
-// 0 -> !visited yet
-// 1 -> visited
 void get_rules(set *cnt, vector *targets)
 {
     size_t num_targets = vector_size(targets);
