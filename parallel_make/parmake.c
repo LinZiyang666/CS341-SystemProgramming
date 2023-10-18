@@ -92,20 +92,20 @@ int run_status(void *target)
     size_t num_dependencies = vector_size(dependencies);
     if (num_dependencies > 0)
     {
-        int is_file_1 = (access((char *)target, F_OK) != -1);
+        int is_file_1 = (access((char *)target, F_OK) != ERR);
         if (is_file_1)
         { // The rule is the name of a file on disk
             for (size_t i = 0; i < num_dependencies; ++i)
             {
                 char *dependency = vector_get(dependencies, i);
-                int is_file_2 = (access(dependency, F_OK) != -1);
+                int is_file_2 = (access(dependency, F_OK) != ERR);
                 if (is_file_2)
                 { //  it depends on another file
 
                     struct stat stat_file_1, stat_file_2;
                     int err_stat_1 = stat(target, &stat_file_1);
                     int err_stat_2 = stat(target, &stat_file_2);
-                    if (err_stat_1 == -1 || err_stat_2 == -1) // stat failed
+                    if (err_stat_1 == ERR || err_stat_2 == ERR) // stat failed
                     {
                         vector_destroy(dependencies);
                         return ERR;
@@ -157,7 +157,7 @@ int run_status(void *target)
     else
     { // rule does not depend on any other rule
         vector_destroy(dependencies);
-        int is_file_1 = (access((char *)target, F_OK) != -1);
+        int is_file_1 = (access((char *)target, F_OK) != ERR);
         if (!is_file_1) // not a file; ex: a: echo "A"
             return RUN_IMM;
         else
