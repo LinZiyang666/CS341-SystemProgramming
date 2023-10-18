@@ -20,7 +20,7 @@
 
 // The graph and vector classes are not thread-safe! ->
 // a.) rule_lock, rule_cv for `rules`
-// b.) graph_lock, graph_cv for `g`
+// b.) g_lock for `g`
 graph *g = NULL;
 vector *rules = NULL; // Vector of rules in the order they should execute (i.e: ensures that if A depends on B, B can be found before A in vector 'rules'); Comptued using DFS and adding the nodes in a bottom-up (from leaves to root) approach, after we come back from the recursive call
 pthread_cond_t rule_cv = PTHREAD_COND_INITIALIZER; // CV & Mutex pattern to wake up the last waiting rule that has to be fulfilled
@@ -104,8 +104,8 @@ int run_status(void *target)
                 }
             }
 
-            vector_destroy(dependencies);
-            return 2; // don't run TODO: ask lab
+            vector_destroy(dependencies); 
+            return 2; // then the rule is already satisfied and does not need its commands executed. 
         }
         else
         {   // `target` not a file -> check if all dependencies succeeded (for any dependency: dependency->state = 1), if true -> 1,
@@ -147,8 +147,6 @@ int run_status(void *target)
 // Method that is called when thread is created
 void *solve(void *arg)
 {
-    // (void*) arg; // compiler complains about unused var 
-
     while (TRUE)
     {                                   // Solves artificially created spurious wakeups
         pthread_mutex_lock(&rule_lock); // The vector class is not thread-safe -> lock mutex to access the rules
@@ -198,10 +196,12 @@ void *solve(void *arg)
                     pthread_mutex_unlock(&rule_lock);
 
                     pthread_mutex_lock(&g_lock);
+
                     if (stat_code == -1)
                         rule->state = -1;
-                    else
+                    if (stat_code == 2)
                         rule->state = 1;              // parent should not run & marked as satisfied, so don't run this dependency of the parent either, just mark it as done
+
                     pthread_cond_broadcast(&rule_cv); // let the other rules know about hte change state in this rule; if there are instr. that depend on this rule, they can continue
                     pthread_mutex_unlock(&g_lock);
                     break;
@@ -242,7 +242,7 @@ int has_cycle(void *target)
 {
     dictionary *mp = dictionary_init();
     int isCycle = tricolor(mp, target);
-    dictionary_destroy(mp); // TODO: LAB - Ask if this hsould be destroyed.
+    dictionary_destroy(mp); // TODO: LAB - Ask if this should be destroyed.
     return isCycle;
 }
 
