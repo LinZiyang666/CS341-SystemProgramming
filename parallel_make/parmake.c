@@ -48,23 +48,6 @@ pthread_cond_t rule_cv = PTHREAD_COND_INITIALIZER;     // CV & Mutex pattern to 
 pthread_mutex_t rules_lock = PTHREAD_MUTEX_INITIALIZER; // Only one thread should modify (erase) rules from `rules` vector
 pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;    // Only one thread should work on the graph at a time
 
-/* Helper Functions */
-
-// Allocates a string -> int dictionary and returns it
-dictionary *dictionary_init()
-{
-    dictionary *mp = string_to_int_dictionary_create();
-    vector *nodes = graph_vertices(g);
-    size_t num_nodes = vector_size(nodes);
-    for (size_t i = 0; i < num_nodes; ++i)
-    {
-        int val = 0;
-        dictionary_set(mp, vector_get(nodes, i), &val);
-    }
-    vector_destroy(nodes); // Any vectors returned from graph functions must be destroyed manually to prevent memory leaks. Destroying these vectors will not destroy anything in the actual graph.
-    return mp;
-}
-
 int has_cycle(void *target);
 int tricolor(dictionary *mp, void *target);
 
@@ -261,9 +244,18 @@ void *solve(void *arg)
 // 1, if graph has cycle starting traversal from `target`, else 0
 int has_cycle(void *target)
 {
-    dictionary *mp = dictionary_init();
+    dictionary *mp = string_to_int_dictionary_create();
+    vector *nodes = graph_vertices(g);
+    size_t num_nodes = vector_size(nodes);
+    for (size_t i = 0; i < num_nodes; ++i)
+    {
+        int val = 0;
+        dictionary_set(mp, vector_get(nodes, i), &val);
+    }
+
     int isCycle = tricolor(mp, target);
     dictionary_destroy(mp); // TODO: LAB - Ask if this should be destroyed.
+    vector_destroy(nodes); // Any vectors returned from graph functions must be destroyed manually to prevent memory leaks. Destroying these vectors will not destroy anything in the actual graph.
     return isCycle;
 }
 
@@ -356,7 +348,7 @@ int parmake(char *makefile, size_t num_threads, char **targets)
     int isCycle = 0;
     for (size_t i = 0; i < ngoals; ++i)
     {
-        char *goal_rule = vector_get(goal_rules, i);
+        void *goal_rule = vector_get(goal_rules, i);
         if (has_cycle(goal_rule))
         {
             print_cycle_failure((char *)goal_rule);
