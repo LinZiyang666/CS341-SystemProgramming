@@ -12,6 +12,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <time.h>
+#include <pthread.h>
+
 
 #define TRUE 1
 #define FALSE 0
@@ -145,11 +147,12 @@ int run_status(void *target)
 // Method that is called when thread is created
 void *solve(void *arg)
 {
+    // (void*) arg; // compiler complains about unused var 
 
     while (TRUE)
     {                                   // Solves artificially created spurious wakeups
         pthread_mutex_lock(&rule_lock); // The vector class is not thread-safe -> lock mutex to access the rules
-        size_t num_rules = vector_size(&rule_lock);
+        size_t num_rules = vector_size(rules);
         if (num_rules > 0)
         {
 
@@ -164,13 +167,13 @@ void *solve(void *arg)
 
                     vector_erase(rules, i); // remove rule
                     vector *commands = rule->commands;
-                    int st = rule->state;
+                    int st = 1;
                     pthread_mutex_unlock(&rule_lock);
 
                     size_t num_cmds = vector_size(commands);
                     for (size_t c = 0; c < num_cmds; ++c)
                     {
-                        char *cmd = (char *)vector_get(commands, i);
+                        char *cmd = (char *)vector_get(commands, c);
                         if (system(cmd)) // use system() to run the commands associated with each rule; check if any such `cmd` failed
                         {
                             st = -1;
@@ -189,7 +192,6 @@ void *solve(void *arg)
                 {
 
                     vector_erase(rules, i); // remove rule
-                    int st = rule->state;
                     pthread_mutex_unlock(&rule_lock);
 
                     pthread_mutex_lock(&g_lock);
@@ -204,12 +206,12 @@ void *solve(void *arg)
                 else if (stat_code == 3) // already satisfied & ran previously
                 {
                     vector_erase(rules, i); // remove rule
-                    pthred_mutex_unlock(&rule_lock);
+                    pthread_mutex_unlock(&rule_lock);
                     break;
                 }
-                else if (stat_code == 0 && i + 1 == num_rules) // last rule in the graph & deps not finished yet => WAIT (on cv)
+                else if (i + 1 == num_rules) // last rule in the graph & deps not finished yet => WAIT (on cv)
                 {
-                    pthread_cont_wait(&rule_cv); // unlock rule_lock, WAIT until signaled, re-lock rule_lock
+                    pthread_cond_wait(&rule_cv, &rule_lock); // unlock rule_lock, WAIT until signaled, re-lock rule_lock
                     pthread_mutex_unlock(&rule_lock);
                     break;
                 }
@@ -221,6 +223,8 @@ void *solve(void *arg)
             break;
         }
     }
+
+    return NULL; // don't need ret. val
 }
 
 // Multi-threaded methods END
@@ -257,7 +261,9 @@ int tricolor(dictionary *mp, void *target)
         return 0;
 
     // mark as `in progress` (Gray)
-    dictionary_set(mp, target, 1);
+    int *val = dictionary_get(mp, target); 
+    *val = 1;// update dict value
+
     vector *children = graph_neighbors(g, target);
     size_t num_children = vector_size(children);
 
@@ -272,7 +278,9 @@ int tricolor(dictionary *mp, void *target)
     }
 
     // mark as `finished` (Black)
-    dictionary_set(mp, target, 2);
+    int *final_val = dictionary_get(mp, target); 
+    *final_val = 2;// update dict value
+
     vector_destroy(children);
     return 0; // IF NONE of children produced cycle -> no cycle
 }
@@ -304,10 +312,11 @@ void get_rules(dictionary *cnt, vector *targets)
         void *dependencies = graph_neighbors(g, target);
         get_rules(cnt, dependencies); // DFS
 
-        int seen = (*(int *)dictionary_get(g, target));
+        int seen = (*(int *)dictionary_get(cnt, target));
         if (!seen)
         {
-            dictionary_set(cnt, target, 1);  // mark as seen
+            int *val = dictionary_get(cnt, target);  
+            *val = 1;                      // mark value as seen
             vector_push_back(rules, target); // enqueue
         }
         vector_destroy(dependencies);
@@ -319,7 +328,7 @@ void get_rules(dictionary *cnt, vector *targets)
 int parmake(char *makefile, size_t num_threads, char **targets)
 {
     // good luck!
-    graph *g = parser_parse_makefile(makefile, targets); // contains empty sentinel rule w/ key ""
+    g = parser_parse_makefile(makefile, targets); // contains empty sentinel rule w/ key ""
     vector *goal_rules = graph_neighbors(g, "");         // only work on rules that descend from this rule (i.e. the goal rules and all their descendants)
     size_t ngoals = vector_size(goal_rules);
 
@@ -346,9 +355,9 @@ int parmake(char *makefile, size_t num_threads, char **targets)
         get_rules_in_order(goal_rules);  // The rule’s commands need to be run sequentially in the order they appear in the command vector
 
         pthread_t threads[num_threads];
-        for (int i = 0; i < num_threads; ++i)
+        for (size_t i = 0; i < num_threads; ++i)
             pthread_create(threads + i, NULL, solve, NULL);
-        for (int i = 0; i < num_threads; ++i)
+        for (size_t i = 0; i < num_threads; ++i)
             pthread_join(threads[i], NULL);
 
         vector_destroy(rules);
