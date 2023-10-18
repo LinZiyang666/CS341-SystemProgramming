@@ -1,0 +1,4 @@
+This rule is going to fail, since 'asdf' does not exist
+This rule should still execute since it has no failed
+dependencies. Note that GNU make does not follow this behavior.
+cat: asdf: No such file or directory

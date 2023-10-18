@@ -1,0 +1,53 @@
+# With 2 threads
+All of Stage #1 should run at the SAME time (with threads >= 2)
+Stage #1(a)
+Stage #1(a) complete!
+Stage #1(b)
+Stage #1(b) complete!
+Stage #2 should not run until after all of Stage #1 has completed.
+Stage #2
+Stage #3 should not run until after all of Stage #2 has completed.
+All of Stage #3 should run at the SAME time (with threads >= 3).
+
+With (threads == 2), two of the three Stage #3s should run at first.
+If Stage #3(b) runs during the first batch, it will finish AFTER the
+other Stage #3 thread.  Stage #3(a) or Stage #3(c), whichever thread
+that did not run with Stage #3(b), should start running before Stage #3(b)
+finishes.
+
+Stage #3(a)
+Stage #3(b)
+Stage #3(a) complete!
+Stage #3(c)
+Stage #3(b) complete!
+Stage #3(c) complete!
+
+
+
+----------
+
+# With 3 threads
+
+All of Stage #1 should run at the SAME time (with threads >= 2)
+Stage #1(b)
+Stage #1(a)
+Stage #1(a) complete!
+Stage #1(b) complete!
+Stage #2 should not run until after all of Stage #1 has completed.
+Stage #2
+Stage #3 should not run until after all of Stage #2 has completed.
+All of Stage #3 should run at the SAME time (with threads >= 3).
+
+With (threads == 2), two of the three Stage #3s should run at first.
+If Stage #3(b) runs during the first batch, it will finish AFTER the
+other Stage #3 thread.  Stage #3(a) or Stage #3(c), whichever thread
+that did not run with Stage #3(b), should start running before Stage #3(b)
+finishes.
+
+Stage #3(a)
+Stage #3(b)
+Stage #3(c)
+Stage #3(a) complete!
+Stage #3(c) complete!
+Stage #3(b) complete!
+This should be the final line, only after all of Stage #3 has completed.

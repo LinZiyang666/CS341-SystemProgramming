@@ -1,0 +1,31 @@
+- First time you run it
+
+=========================
+=== NO NEW FILE FOUND ===
+=========================
+
+Creating an examples/file1 file that is newer than examples/oldfile.
+If file1 was already created (eg: last time you ran this), this message should not be seen.
+This (and the following lines) line should always be shown.
+
+If you would like to reset this testcase, run:
+===
+make -f testfile5 reset
+===
+...OR, even better, use your own program to reset it! To do that:
+===
+./parmake -f testfile5 reset
+===
+
+- >= 2 time
+
+This (and the following lines) line should always be shown.
+
+If you would like to reset this testcase, run:
+===
+make -f testfile5 reset
+===
+...OR, even better, use your own program to reset it! To do that:
+===
+./parmake -f testfile5 reset
+===

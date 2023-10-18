@@ -1,0 +1,7 @@
+a:
+This should always print out because both 'all' and 'b' depend
+upon 'a'
+
+all:
+This only depends on 'a', so by default, running parmake on
+this Makefile should only print this and 'a'
