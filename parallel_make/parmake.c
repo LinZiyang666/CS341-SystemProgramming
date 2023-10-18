@@ -22,11 +22,10 @@
 // a.) rule_lock, rule_cv for `rules`
 // b.) graph_lock, graph_cv for `g`
 graph *g = NULL;
-vector *rules = NULL;
-pthread_cond_t rule_cv = PTHREAD_COND_INITIALIZER;
-pthread_cond_t g_cv = PTHREAD_COND_INITIALIZER;
-pthread_mutex_t rule_lock = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
+vector *rules = NULL; // Vector of rules in the order they should execute (i.e: ensures that if A depends on B, B can be found before A in vector 'rules'); Comptued using DFS and adding the nodes in a bottom-up (from leaves to root) approach, after we come back from the recursive call
+pthread_cond_t rule_cv = PTHREAD_COND_INITIALIZER; // CV & Mutex pattern to wake up the last waiting rule that has to be fulfilled
+pthread_mutex_t rule_lock = PTHREAD_MUTEX_INITIALIZER; // Only one thread should work on one rule at a time
+pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER; // Only one thread should work on the graph at a time
 
 /* Helper Functions */
 
@@ -121,9 +120,10 @@ int run_status(void *target)
                 rule_t *sub_rule = (rule_t *)graph_get_vertex_value(g, dependency);
                 if (sub_rule->state != 1) // dependency not succeeded yet
                 {
+                    int st = sub_rule->state;
                     pthread_mutex_unlock(&g_lock);
                     vector_destroy(dependencies);
-                    return sub_rule->state;
+                    return st;
                 }
             }
 
@@ -167,8 +167,9 @@ void *solve(void *arg)
 
                     vector_erase(rules, i); // remove rule
                     vector *commands = rule->commands;
-                    int st = 1;
                     pthread_mutex_unlock(&rule_lock);
+
+                    int st = 1;
 
                     size_t num_cmds = vector_size(commands);
                     for (size_t c = 0; c < num_cmds; ++c)
@@ -183,7 +184,9 @@ void *solve(void *arg)
 
                     // Change state, and ensure thread-safeness by locking graph_lock -> no one else accesses the rule () while we modify it
                     pthread_mutex_lock(&g_lock);
+
                     rule->state = st;
+
                     pthread_cond_broadcast(&rule_cv); // let the other rules know about hte change state in this rule; if there are instr. that depend on this rule, they can continue
                     pthread_mutex_unlock(&g_lock);
                     break;
