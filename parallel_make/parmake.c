@@ -13,6 +13,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <pthread.h>
+#include <set.h>
 
 
 #define TRUE 1
@@ -48,7 +49,7 @@ int has_cycle(void *target);
 int tricolor(dictionary *mp, void *target);
 
 void get_rules_in_order(vector *targets);
-void get_rules(dictionary *cnt, vector *targets);
+void get_rules(set *cnt, vector *targets);
 
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ //
 // Multi-threaded methods
@@ -298,16 +299,16 @@ int tricolor(dictionary *mp, void *target)
 
 void get_rules_in_order(vector *targets)
 {
-    dictionary *cnt = dictionary_init(); // TODO: Later change to use a SET
+    set *cnt = shallow_set_create(); 
     get_rules(cnt, targets);
-    dictionary_destroy(cnt);
+    set_destroy(cnt);
 }
 
 // Perform a DFS and enque the nodes when you get back from recursive call (i.e: target is enqueued AFTER all it's dependencies have been enqueued)
 // Each entry in `cnt` dictionary can be in one of the following states:
 // 0 -> !visited yet
 // 1 -> visited
-void get_rules(dictionary *cnt, vector *targets)
+void get_rules(set *cnt, vector *targets)
 {
     size_t num_targets = vector_size(targets);
     for (size_t i = 0; i < num_targets; ++i)
@@ -316,11 +317,10 @@ void get_rules(dictionary *cnt, vector *targets)
         void *dependencies = graph_neighbors(g, target);
         get_rules(cnt, dependencies); // DFS
 
-        int seen = (*(int *)dictionary_get(cnt, target));
+        int seen = set_contains(cnt, target);
         if (!seen)
         {
-            int *val = dictionary_get(cnt, target);  
-            *val = 1;                      // mark value as seen
+            set_add(cnt, target); // visit
             vector_push_back(rules, target); // enqueue
         }
         vector_destroy(dependencies);
