@@ -156,7 +156,7 @@ void *solve(void *arg)
         if (num_rules > 0)
         {
 
-            for (size_t i = 0; i < num_rules; ++i) // TODO: Check if we can do it without for loop
+            for (size_t i = 0; i < num_rules; ++i) 
             {
                 void *target = vector_get(rules, i);
                 int stat_code = run_status(target);
@@ -215,6 +215,7 @@ void *solve(void *arg)
                     pthread_mutex_unlock(&rule_lock);
                     break;
                 }
+                // if neither `if` case was true -> stat_code = 0 & not last rule to execute => SKIP it, will try again later
             }
         }
         else
