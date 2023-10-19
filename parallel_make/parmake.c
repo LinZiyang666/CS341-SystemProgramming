@@ -87,7 +87,7 @@ int run_status(void *target)
 
                     struct stat stat_file_1, stat_file_2;
                     int err_stat_1 = stat(target, &stat_file_1);
-                    int err_stat_2 = stat(target, &stat_file_2);
+                    int err_stat_2 = stat(dependency, &stat_file_2);
                     if (err_stat_1 == ERR || err_stat_2 == ERR) // stat failed
                     {
                         vector_destroy(dependencies);
@@ -357,6 +357,7 @@ int parmake(char *makefile, size_t num_threads, char **targets)
         char *node = vector_get(nodes, i);
         dictionary_set(mp, node, &val);
     }
+    vector_destroy(nodes); // Any vectors returned from graph functions must be destroyed manually to prevent memory leaks. Destroying these vectors will not destroy anything in the actual graph
 
     for (size_t i = 0; i < ngoals; ++i)
     {
@@ -387,6 +388,7 @@ int parmake(char *makefile, size_t num_threads, char **targets)
     }
 
 
+    vector_destroy(dict_keys);
     vector_destroy(goal_rules);
     dictionary_destroy(mp);
 
