@@ -14,7 +14,7 @@
 #include <time.h>
 #include <pthread.h>
 #include <set.h>
-
+#include <stdio.h>
 /*
 Error codes for run status
 
@@ -43,10 +43,10 @@ ALREADY_DONE(3): rule was already satisfied & run previously
 // a.) rules_lock, rule_cv for `rules`
 // b.) g_lock for `g`
 graph *g = NULL;
-vector *rules = NULL;                                  // Vector of rules in the order they should execute (i.e: ensures that if A depends on B, B can be found before A in vector 'rules'); Comptued using DFS and adding the nodes in a bottom-up (from leaves to root) approach, after we come back from the recursive call
-pthread_cond_t rule_cv = PTHREAD_COND_INITIALIZER;     // CV & Mutex pattern to wake up the last waiting rule that has to be fulfilled
+vector *rules = NULL;                                   // Vector of rules in the order they should execute (i.e: ensures that if A depends on B, B can be found before A in vector 'rules'); Comptued using DFS and adding the nodes in a bottom-up (from leaves to root) approach, after we come back from the recursive call
+pthread_cond_t rule_cv = PTHREAD_COND_INITIALIZER;      // CV & Mutex pattern to wake up the last waiting rule that has to be fulfilled
 pthread_mutex_t rules_lock = PTHREAD_MUTEX_INITIALIZER; // Only one thread should modify (erase) rules from `rules` vector
-pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;    // Only one thread should work on the graph at a time
+pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;     // Only one thread should work on the graph at a time
 
 int has_cycle(void *target);
 int tricolor(dictionary *mp, void *target);
@@ -152,7 +152,7 @@ int run_status(void *target)
 void *solve(void *arg)
 {
     while (TRUE)
-    {                                   // Solves artificially created spurious wakeups
+    {                                    // Solves artificially created spurious wakeups
         pthread_mutex_lock(&rules_lock); // The vector class is not thread-safe -> lock mutex to access the rules
         size_t num_rules = vector_size(rules);
         if (num_rules > 0)
@@ -179,10 +179,10 @@ void *solve(void *arg)
                     {
                         char *cmd = (char *)vector_get(commands, c);
                         if (system(cmd)) // use system() to run the commands associated with each rule; check if any such `cmd` failed
-                            {
-                                st = INVALID; // exit loop if so
-                                break;
-                            }
+                        {
+                            st = INVALID; // exit loop if so
+                            break;
+                        }
                     }
 
                     // Change state, and ensure thread-safeness by locking graph_lock -> no one else accesses the rule () while we modify it
@@ -241,23 +241,7 @@ void *solve(void *arg)
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ //
 // Cycle methods
 
-// 1, if graph has cycle starting traversal from `target`, else 0
-int has_cycle(void *target)
-{
-    dictionary *mp = string_to_int_dictionary_create();
-    vector *nodes = graph_vertices(g);
-    size_t num_nodes = vector_size(nodes);
-    for (size_t i = 0; i < num_nodes; ++i)
-    {
-        int val = 0;
-        dictionary_set(mp, vector_get(nodes, i), &val);
-    }
-
-    int isCycle = tricolor(mp, target);
-    dictionary_destroy(mp); // TODO: LAB - Ask if this should be destroyed.
-    vector_destroy(nodes); // Any vectors returned from graph functions must be destroyed manually to prevent memory leaks. Destroying these vectors will not destroy anything in the actual graph.
-    return isCycle;
-}
+dictionary *mp = NULL;
 
 /*
 Source: https://www.cs.cornell.edu/courses/cs2112/2012sp/lectures/lec24/lec24-12sp.html
@@ -323,6 +307,7 @@ void get_rules(set *cnt, vector *targets)
     for (size_t i = 0; i < num_targets; ++i)
     {
         void *target = vector_get(targets, i);
+        // puts((char*) target);
         void *dependencies = graph_neighbors(g, target);
         get_rules(cnt, dependencies); // DFS
 
@@ -338,6 +323,22 @@ void get_rules(set *cnt, vector *targets)
 
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ //
 
+// Ret. goal rule ptr associated w/ key if it is a goal rule, else: NULL
+char *get_goal_rule(vector *goal_rules, void *key)
+{
+    char *target = (char *)key;
+    size_t num_goal_rules = vector_size(goal_rules);
+
+    for (size_t i = 0; i < num_goal_rules; ++i)
+    {
+        char *goal_rule = (char *)vector_get(goal_rules, i);
+        if (string_compare(goal_rule, target) == 0)
+            return goal_rule;
+    }
+
+    return NULL;
+}
+
 int parmake(char *makefile, size_t num_threads, char **targets)
 {
     // good luck!
@@ -345,37 +346,73 @@ int parmake(char *makefile, size_t num_threads, char **targets)
     vector *goal_rules = graph_neighbors(g, "");  // only work on rules that descend from this rule (i.e. the goal rules and all their descendants)
     size_t ngoals = vector_size(goal_rules);
 
-    int isCycle = 0;
+    vector *valid_goal_rules = shallow_vector_create();
+
+    mp = string_to_int_dictionary_create();
+    vector *nodes = graph_vertices(g);
+    size_t num_nodes = vector_size(nodes);
+    for (size_t i = 0; i < num_nodes; ++i)
+    {
+        int val = 0;
+        char *node = vector_get(nodes, i);
+        dictionary_set(mp, node, &val);
+    }
+
     for (size_t i = 0; i < ngoals; ++i)
     {
         void *goal_rule = vector_get(goal_rules, i);
-        if (has_cycle(goal_rule))
+
+        if (tricolor(mp, goal_rule))
         {
             print_cycle_failure((char *)goal_rule);
-            isCycle = 1;
         }
     }
 
-    if (isCycle)
-    {
-        vector_destroy(goal_rules);
-        graph_destroy(g);
-        return 0;
-    }
-    else
-    {
-        rules = shallow_vector_create(); // to allow caller (ME) to perform memory management
-        get_rules_in_order(goal_rules);  // The rule’s commands need to be run sequentially in the order they appear in the command vector
+    vector *dict_keys = dictionary_keys(mp);
+    size_t num_dict_keys = vector_size(dict_keys);
 
-        pthread_t threads[num_threads];
-        for (size_t i = 0; i < num_threads; ++i)
-            pthread_create(threads + i, NULL, solve, NULL);
-        for (size_t i = 0; i < num_threads; ++i)
-            pthread_join(threads[i], NULL);
-
-        vector_destroy(rules);
-        vector_destroy(goal_rules);
-        graph_destroy(g);
-        return 0;
+    for (size_t i = 0; i < num_dict_keys; ++i)
+    {
+        char *key = vector_get(dict_keys, i);
+        // printf("key %s in 2nd for: %p\n", (char*) key, (void*)key);
+        int *val = (int *)dictionary_get(mp, key);
+        if (*val == 1) // part of a cycle
+            graph_remove_vertex(g, key);
+        else
+        {
+            char *goal_rule = get_goal_rule(goal_rules, key);
+            if (goal_rule)
+                vector_push_back(valid_goal_rules, goal_rule);
+        }
     }
+
+
+    vector_destroy(goal_rules);
+    dictionary_destroy(mp);
+
+    rules = shallow_vector_create();      // to allow caller (ME) to perform memory management
+    get_rules_in_order(valid_goal_rules); // The rule’s commands need to be run sequentially in the order they appear in the command vector
+
+    pthread_t threads[num_threads];
+    for (size_t i = 0; i < num_threads; ++i)
+        pthread_create(threads + i, NULL, solve, NULL);
+    for (size_t i = 0; i < num_threads; ++i)
+        pthread_join(threads[i], NULL);
+
+    vector_destroy(rules);
+    vector_destroy(valid_goal_rules);
+    graph_destroy(g);
+    return 0;
 }
+
+// void dbg_goal_rules_set()
+// {
+//     // printf("key %s in 1st for: %p", (char*) goal_rule, (void*)goal_rule);
+//     // set_add(goal_rules_set, (char*)goal_rule);
+//     // printf("%ld %s\n", set_cardinality(goal_rules_set), (char*)goal_rule);
+
+//     // size_t sz = vector_size(valid_goal_rules);
+//     // printf("%ld\n", sz);
+//     // for (size_t i = 0; i < sz; ++i)
+//     //     puts(vector_get(valid_goal_rules, i));
+// }
