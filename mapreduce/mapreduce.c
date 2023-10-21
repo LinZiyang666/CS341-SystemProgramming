@@ -49,10 +49,10 @@ int main(int argc, char **argv) {
 
             // in_file, mapper_count_str, i_str
             char *mapper_count_str = argv[5]; 
-            char *i_str = NULL;
-            sprintf(i_str, "%d", argv[1]);
+            char i_str[10];
+            sprintf(i_str, "%d", i);
 
-            execlp("./splitter", "./splitter", in_file, mapper_count_str, i_str, NULL);
+            execlp("./splitter", "./splitter", in_file, mapper_count_str, i_str, (void*)NULL);
             exit(-1);
         }
     }
@@ -69,7 +69,7 @@ int main(int argc, char **argv) {
             dup2(mp[i][0], 0); 
             dup2(red[1], 1); 
 
-            execlp(mapper_exec, mapper_exec, NULL);
+            execlp(mapper_exec, mapper_exec, (void*)NULL);
             exit(-1);
          }
         
@@ -83,9 +83,9 @@ int main(int argc, char **argv) {
     if (red_proc == 0) // child
     {
         dup2(red[0], 0);
-        int out_fd = fileno(out_file);
+        int out_fd = fileno(writer);
         dup2(out_fd, 1);
-        execlp(reducer_exec, reducer_exec, NULL);
+        execlp(reducer_exec, reducer_exec, (void*)NULL);
         exit(-1);
     }
 
@@ -93,17 +93,17 @@ int main(int argc, char **argv) {
     for (int i = 0; i < mapper_count; ++i) // splitters
     {
         int status;
-        waitpid(splitter_procs[i], &status, NULL);
+        waitpid(splitter_procs[i], &status, 0);
     }
 
     for (int i = 0; i < mapper_count; ++i) // mappers
     {
         int status;
-        waitpid(mapper_procs[i], &status, NULL);
+        waitpid(mapper_procs[i], &status, 0);
     }
     
     int status;
-    waitpid(red_proc, &status, NULL);
+    waitpid(red_proc, &status, 0);
 
     // Print nonzero subprocess exit codes.
     if (status)
