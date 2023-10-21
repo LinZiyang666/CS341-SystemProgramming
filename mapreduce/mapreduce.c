@@ -12,6 +12,10 @@
 int main(int argc, char **argv)
 {
 
+    // Use `execl` -> 
+    // The versions without the 'p' require an absolute or relative file path to be prepended to the filename of the executable
+    //  if it is not in the current working directory.
+
     if (argc != 6)
     {
         print_usage();
@@ -57,7 +61,7 @@ int main(int argc, char **argv)
             char i_str[10];
             sprintf(i_str, "%d", i);
 
-            execlp("./splitter", "./splitter", in_file, mapper_count_str, i_str, (void *)NULL);
+            execl("./splitter", "./splitter", in_file, mapper_count_str, i_str, (void *)NULL);
             exit(-1);
         }
         else if (pid > 0)
@@ -82,7 +86,7 @@ int main(int argc, char **argv)
             dup2(mp[i][0], 0);
             dup2(red[1], 1);
 
-            execlp(mapper_exec, mapper_exec, (void *)NULL);
+            execl(mapper_exec, mapper_exec, (void *)NULL);
             exit(-1);
         }
         else if (pid > 0)
@@ -103,7 +107,7 @@ int main(int argc, char **argv)
         dup2(red[0], 0);
         int out_fd = fileno(writer);
         dup2(out_fd, 1);
-        execlp(reducer_exec, reducer_exec, (void *)NULL);
+        execl(reducer_exec, reducer_exec, (void *)NULL);
         exit(-1);
     }
     else if (red_proc == -1) {
