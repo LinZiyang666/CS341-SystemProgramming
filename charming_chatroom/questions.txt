@@ -1,31 +1,49 @@
 1) What is a socket?
+- A file descriptor used for generalized IPC = Inter Process Communication
+- Support communication between diff. machines that communicate over a network
 
 
 2) What is the difference between the domains AF_INET and AF_UNIX?
-
+- AF_INET = IPv4
+- AF_UNIX = used to communicate between processes on the same UNIX machine
 
 3) What is the difference between SOCK_STREAM and SOCK_DGRAM?
-
+- SOCK_STREAM = Provides sequenced, reliable, two-way, connection-based byte streams.; used for TCP
+- SOCK_DGRAM = Supports datagrams (connectionless, unreliable messages of a fixed maximum length); used for UDP 
 
 4) Why is it important to clear all the values the addrinfo struct before using it in getaddrinfo?
+- Zero out `&hints` ; where `struct addrinfo hints` -> as it is required in the man page: `man getaddrinfo` ->  All the other fields in the structure pointed to by hints must contain either 0 or a null pointer, as appropriate.
 
 
 5) What are ai_family and ai_socktype?
-
+- ai_faimily =  desired address family for the returned addresses.; i.e.: IPv4 - AF_INET (in the case of this lab), IPv6 - AF_INET6
+- ai_socktype =  This field specifies the preferred socket type, for example SOCK_STREAM - TCP (the case of this lab) or SOCK_DGRAM - UDP. 
 
 6) What does getaddrinfo do?
-
+- Sets up all info we need to establish the connection
+- perform address resolution and retrieve information about network addresses, such as IP addresses and port numbers, which is essential for establishing network connections
+- Called on both client and server side
 
 7) What does connect do?
-
+- Connects socket of the client (sock_fd) to the server's address. (res -> ai_addr)
+- Called by client to connect to the server
 
 8) What is setsockopt?
-
+- Sets / manipulates options / flags for the socket
+- Call `SO_REUSEADDR` and `SO_REUSEPORT` on the server side to ensure to ensure bind() doesn’t fail in the event that your server or client crashes.": for Reusable Addresses and Ports
 
 9) What does bind do?
+- When we create a socket on the server side, it does not have an address assigned to it !
+- Assigns the address specified by addr to the socket referred to by the file descriptor sockfd.
+- Only done on the server-side (MANDATORY); even though it can be done on the client-side as well, it is usually rare (see L25 notes)
+- Maps `sock -> address`
 
 
 10) What does listen do?
-
-
+- Marks the socket as passive socket = a socket that will be used to accept incoming connection requess using `accept`
+- Called on server-side
+ 
 11) What does accept do?
+- Accepts a connection request from the `client`
+- Called on server-side
+- NOTE: may block
