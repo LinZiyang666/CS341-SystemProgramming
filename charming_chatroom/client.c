@@ -30,6 +30,12 @@ void close_program(int signal);
  */
 void close_server_connection() {
     // Your code here
+
+    // To be precise, when your client program receives a SIGINT it should free memory, close sockets, and gracefully exit the program.
+
+    shutdown(serverSocket, SHUT_RDWR);   // we do not want to communicate w/ server anymore
+    close(serverSocket);
+
 }
 
 /**
@@ -45,14 +51,39 @@ int connect_to_server(const char *host, const char *port) {
     /*QUESTION 1*/
     /*QUESTION 2*/
     /*QUESTION 3*/
+    // Theoretical questions
 
     /*QUESTION 4*/
+    struct addrinfo hints, *res; 
+    memset(&hints, 0, sizeof(hints));
     /*QUESTION 5*/
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
 
     /*QUESTION 6*/
+    int err = getaddrinfo(host, port, &hints, &res);
+    if (err) { // For the one that you cannot use perror, use the man pages to learn how to print the error. You must figure out which function does not set errno upon failure and thus you cannot use perror.
+        fprintf(stderr, "%s", gai_strerror(err));
+        exit(1);
+    }
 
+
+    // `hints` is used to specify the criteria for address resolution before calling getaddrinfo.
+    // `res` is used to store the results of the address resolution obtained by getaddrinfo after the function cal
+    int sock_fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    if (sock_fd == -1) {
+        perror(NULL);
+        exit(1);
+    }
     /*QUESTION 7*/
-    return -1;
+    int conn_err = connect(sock_fd, res->ai_addr, res->ai_addrlen);
+    if (conn_err == -1) {
+        perror(NULL);
+        exit(1);
+    }
+
+    freeaddrinfo(res); // frees the memory that was allocated for the dynamically allocated linked list res.
+    return sock_fd;
 }
 
 typedef struct _thread_cancel_args {
