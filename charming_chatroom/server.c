@@ -28,6 +28,7 @@ static volatile int clients[MAX_CLIENTS];
 
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
+static pthread_t tids[MAX_CLIENTS]; // Per client, a thread should be created and 'process_client' should handle that client.
 
 /**
  * Signal handler for SIGINT.
@@ -35,17 +36,12 @@ static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
  */
 void close_server() {
     endSession = 1;
+    // fprintf(stderr, "i'm here!!!!!!!!!!!!!\n");
     // add any additional flags here you want.
 
-    for (int i = 0; i < MAX_CLIENTS; ++i) 
-    if (clients[i] != -1) {
-        int err = shutdown(clients[i], SHUT_RDWR);
-        if (err) {perror("shudown(): ");}
-        close(clients[i]);
-    }
 
-    // Gracefully exit program
-    exit(0);
+    // // Gracefully exit program
+    // exit(0);
 }
 
 /**
@@ -91,7 +87,6 @@ void run_server(char *port) {
     /*QUESTION 3*/
     // Theoretical questions
 
-    pthread_t tids[MAX_CLIENTS]; // Per client, a thread should be created and 'process_client' should handle that client.
     for (size_t i = 0; i < MAX_CLIENTS; ++i) // Initialise clients as "not existing"
         clients[i] = -1;
 
@@ -172,6 +167,11 @@ void run_server(char *port) {
 
         pthread_mutex_unlock(&mutex);
 
+    }
+
+    for (int i = 0; i < MAX_CLIENTS; ++i) 
+    if (clients[i] != -1) {
+        pthread_join(tids[i], NULL);
     }
 }
 
