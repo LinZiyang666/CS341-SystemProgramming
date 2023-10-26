@@ -36,6 +36,9 @@ void close_server_connection() {
     shutdown(serverSocket, SHUT_RDWR);   // we do not want to communicate w/ server anymore
     close(serverSocket);
 
+    // Gracefully exit prog.
+    exit(0); 
+
 }
 
 /**

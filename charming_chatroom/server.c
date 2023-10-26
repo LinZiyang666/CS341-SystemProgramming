@@ -28,6 +28,7 @@ static volatile int clients[MAX_CLIENTS];
 
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
+
 /**
  * Signal handler for SIGINT.
  * Used to set flag to end server.
@@ -35,6 +36,16 @@ static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 void close_server() {
     endSession = 1;
     // add any additional flags here you want.
+
+    for (size_t i = 0; i < clientsCount; ++i) 
+    if (clients[i] != -1) {
+        int err = shutdown(clients[i], SHUT_RDWR);
+        if (err) {perror("shudown(): ");}
+        close(clients[i]);
+    }
+
+    // Gracefully exit program
+    exit(0);
 }
 
 /**
@@ -78,18 +89,90 @@ void run_server(char *port) {
     /*QUESTION 1*/
     /*QUESTION 2*/
     /*QUESTION 3*/
+    // Theoretical questions
+
+    pthread_t tids[MAX_CLIENTS]; // Per client, a thread should be created and 'process_client' should handle that client.
+    for (size_t i = 0; i < MAX_CLIENTS; ++i) // Initialise clients as "not existing"
+        clients[i] = -1;
+
+    // Initialise socket to run `setsockopt` on it
+    int sock_fd = socket(AF_INET, SOCK_STREAM, 0);
+    serverSocket = sock_fd;
 
     /*QUESTION 8*/
+    int reuse_addr = 1;
+    if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, &reuse_addr, sizeof(reuse_addr)) < 0) {
+        perror(NULL);
+        exit(EXIT_FAILURE);
+    }
+    int reuse_port = 1;
+    if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEPORT, &reuse_port, sizeof(reuse_port)) < 0) {
+        perror(NULL);
+        exit(EXIT_FAILURE);
+    }
 
     /*QUESTION 4*/
+    struct addrinfo hints, *res;
+    memset (&hints, 0, sizeof (struct addrinfo));
     /*QUESTION 5*/
+    hints.ai_family = AF_INET; // IPv4  
+    hints.ai_socktype = SOCK_STREAM; // TCP
+    hints.ai_flags = AI_PASSIVE; // << We want Server socket;
+
     /*QUESTION 6*/
+    int err = getaddrinfo(NULL, port, &hints, &res);
+    if (err) {
+        fprintf(stderr, "%s", gai_strerror(err));
+        exit(1);
+    }
 
     /*QUESTION 9*/
+    int bind_err = bind(sock_fd, res->ai_addr, res->ai_addrlen);
+    if (-1 == bind_err) {
+        perror(NULL);
+        exit(EXIT_FAILURE);
+    }
+
+    freeaddrinfo(res); // Not needed anymore => free as early as possible
 
     /*QUESTION 10*/
+    int listen_err = listen(sock_fd, MAX_CLIENTS); 
+    if (-1 == listen_err) {
+        perror(NULL);
+        exit(EXIT_FAILURE);
+    }
 
     /*QUESTION 11*/
+
+    while (!endSession) { // while the server has not closed (endSession != 0) => giant while-loop in which we try to accept clients' connections
+
+        int client_fd = accept(sock_fd, NULL, NULL);
+        if (-1 == client_fd ) {
+            perror(NULL);
+            exit(EXIT_FAILURE);
+        }
+
+        pthread_mutex_lock(&mutex);
+
+        if (clientsCount == MAX_CLIENTS) { // shut down new client, continue accepting
+            shutdown(client_fd, SHUT_RDWR);
+            close(client_fd);
+        }
+        else { // accept new client
+            clientsCount ++;
+            // assign id to client & 
+            // a thread should be created and 'process_client' should handle that client.
+            for (size_t id = 0; id < MAX_CLIENTS; ++id)
+                if (clients[id] == -1) {
+                    clients[id] = client_fd; 
+                    pthread_create(tids + id, NULL, process_client, (void *) id);
+                    break;
+                }
+        }
+
+        pthread_mutex_unlock(&mutex);
+
+    }
 }
 
 /**
