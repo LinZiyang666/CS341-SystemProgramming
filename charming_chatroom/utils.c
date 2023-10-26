@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <unistd.h>
 
 #include "utils.h"
 static const size_t MESSAGE_SIZE_DIGITS = 4;
@@ -42,7 +43,7 @@ ssize_t write_message_size(size_t size, int socket)
     size_t network_size = htonl(size);
 
     ssize_t wrote_bytes =
-        write_all_to_socket(socket, (char *)&network_size, MESSAGE_SIZE_DIGITS);
+        write_all_to_socket(socket, (char *) &network_size, MESSAGE_SIZE_DIGITS);
 
     if (wrote_bytes == 0 || wrote_bytes == -1)
         return wrote_bytes;
@@ -53,12 +54,14 @@ ssize_t write_message_size(size_t size, int socket)
 ssize_t read_all_from_socket(int socket, char *buffer, size_t count)
 {
     // Your Code Here
-    ssize_t bytes_read = 0;
+    size_t bytes_read = 0;
     while (bytes_read < count)
     { // have not read all bytes
         int remaining_bytes_to_read = count - bytes_read;
         ssize_t newly_read_bytes = read(socket, buffer + bytes_read, remaining_bytes_to_read);
-        if (newly_read_bytes == -1)
+        if (newly_read_bytes == 0) // socket disconnected
+            break;
+        else if (newly_read_bytes == -1)
         { // error
             // check error code
             if (errno == EINTR) // interrupted
@@ -74,12 +77,14 @@ ssize_t read_all_from_socket(int socket, char *buffer, size_t count)
 
 ssize_t write_all_to_socket(int socket, const char *buffer, size_t count)
 {
-    ssize_t bytes_wrote = 0;
+    size_t bytes_wrote = 0;
     while (bytes_wrote < count)
     { // have not written all bytes
         int remaining_bytes_to_write = count - bytes_wrote;
-        ssize_t newly_wrote_bytes = read(socket, buffer + bytes_wrote, remaining_bytes_to_write);
-        if (newly_wrote_bytes == -1)
+        ssize_t newly_wrote_bytes = write(socket, (char *) buffer + bytes_wrote, remaining_bytes_to_write);
+        if (newly_wrote_bytes == 0) // socket disconnected
+            break;
+        else if (newly_wrote_bytes == -1)
         { // error
             // check error code
             if (errno == EINTR) // interrupted

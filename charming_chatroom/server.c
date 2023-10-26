@@ -37,7 +37,7 @@ void close_server() {
     endSession = 1;
     // add any additional flags here you want.
 
-    for (size_t i = 0; i < clientsCount; ++i) 
+    for (int i = 0; i < MAX_CLIENTS; ++i) 
     if (clients[i] != -1) {
         int err = shutdown(clients[i], SHUT_RDWR);
         if (err) {perror("shudown(): ");}
