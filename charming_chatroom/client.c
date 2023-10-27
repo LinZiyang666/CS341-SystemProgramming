@@ -33,12 +33,9 @@ void close_server_connection() {
 
     // To be precise, when your client program receives a SIGINT it should free memory, close sockets, and gracefully exit the program.
 
+    // Gracefully exit prog.
     shutdown(serverSocket, SHUT_RDWR);   // we do not want to communicate w/ server anymore
     close(serverSocket);
-
-    // Gracefully exit prog.
-    exit(0); 
-
 }
 
 /**
@@ -67,6 +64,7 @@ int connect_to_server(const char *host, const char *port) {
     int err = getaddrinfo(host, port, &hints, &res);
     if (err) { // For the one that you cannot use perror, use the man pages to learn how to print the error. You must figure out which function does not set errno upon failure and thus you cannot use perror.
         fprintf(stderr, "%s", gai_strerror(err));
+        freeaddrinfo(res);
         exit(1);
     }
 
@@ -76,12 +74,14 @@ int connect_to_server(const char *host, const char *port) {
     int sock_fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
     if (sock_fd == -1) {
         perror(NULL);
+        freeaddrinfo(res);
         exit(1);
     }
     /*QUESTION 7*/
     int conn_err = connect(sock_fd, res->ai_addr, res->ai_addrlen);
     if (conn_err == -1) {
         perror(NULL);
+        freeaddrinfo(res);
         exit(1);
     }
 
