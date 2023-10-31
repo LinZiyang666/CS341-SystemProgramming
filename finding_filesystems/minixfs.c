@@ -78,6 +78,22 @@ int minixfs_chown(file_system *fs, char *path, uid_t owner, gid_t group) {
 
 inode *minixfs_create_inode_for_path(file_system *fs, const char *path) {
     // Land ahoy!
+
+    inode *inode = get_inode(fs, path);
+    if (inode) // inode already exists
+        return NULL;
+    // the path is NOT a valid pathname
+    if (1 != valid_filename(path))
+        return NULL;   
+    // inode cannot be created
+
+    if ( -1 == first_unused_inode(fs) )
+        return NULL;
+    
+    // find its parent inode
+    const char *filename;
+    inode *parent_inode = parent_directory(fs, path, &filename);
+
     return NULL;
 }
 
