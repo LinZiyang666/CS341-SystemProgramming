@@ -69,7 +69,6 @@ int minixfs_chmod(file_system *fs, char *path, int new_permissions)
 
     // This function should update the node's ctim
     clock_gettime(CLOCK_REALTIME, &inode->ctim);
-
     return 0;
 }
 
@@ -94,8 +93,7 @@ int minixfs_chown(file_system *fs, char *path, uid_t owner, gid_t group)
 
     // This function should update the node's ctim
     clock_gettime(CLOCK_REALTIME, &inode->ctim);
-
-    return -1;
+    return 0;
 }
 
 inode *minixfs_create_inode_for_path(file_system *fs, const char *path)
@@ -231,7 +229,7 @@ ssize_t minixfs_write(file_system *fs, const char *path, const void *buf,
         node = minixfs_create_inode_for_path(fs, path);
     }
 
-    size_t blocks_required = (*off + count) % sizeof(data_block);
+    size_t blocks_required = (*off + count) / sizeof(data_block);
     if ((*off + count) % sizeof(data_block) != 0)
         blocks_required++; // compute ceil
 
