@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 /**
  * Virtual paths:
@@ -36,6 +37,22 @@ static char *block_info_string(ssize_t num_used_blocks)
 // Don't modify this line unless you know what you're doing
 int minixfs_virtual_path_count =
     sizeof(minixfs_virtual_path_names) / sizeof(minixfs_virtual_path_names[0]);
+
+// HELPERS
+int get_min(size_t x, size_t y)
+{
+    if (x < y)
+        return x;
+    else
+        return y;
+}
+
+// use offset of parent_inode->indirect to get to the start of `Indirect Data Blocks` region
+data_block_number *get_indirects(file_system *fs, inode *parent_node)
+{
+    data_block_number *indirect_blocks = (data_block_number *)(fs->data_root + parent_node->indirect);
+    return indirect_blocks;
+}
 
 int minixfs_chmod(file_system *fs, char *path, int new_permissions)
 {
@@ -79,15 +96,6 @@ int minixfs_chown(file_system *fs, char *path, uid_t owner, gid_t group)
     clock_gettime(CLOCK_REALTIME, &inode->ctim);
 
     return -1;
-}
-
-// HELPERS
-
-// use offset of parent_inode->indirect to get to the start of `Indirect Data Blocks` region
-data_block_number *get_indirects(file_system *fs, inode *parent_node)
-{
-    data_block_number *indirect_blocks = (data_block_number *)(fs->data_root + parent_node->indirect);
-    return indirect_blocks;
 }
 
 inode *minixfs_create_inode_for_path(file_system *fs, const char *path)
@@ -149,9 +157,11 @@ inode *minixfs_create_inode_for_path(file_system *fs, const char *path)
 
         data_block_number new_db_idx;
         if (parent_inode->indirect == UNASSIGNED_NODE)
+        {
             new_db_idx = add_data_block_to_inode(fs, parent_inode);
-        if (new_db_idx == -1) // FULL
-            return NULL;
+            if (new_db_idx == -1) // FULL
+                return NULL;
+        }
         else
         {
             data_block_number *indirects = get_indirects(fs, parent_inode);
@@ -166,8 +176,10 @@ inode *minixfs_create_inode_for_path(file_system *fs, const char *path)
     // add a new dirent to the parent
     minixfs_dirent src;
     src.inode_num = new_node_idx;
-    src.name = filename;
-    make_string_from_dirent(req_data_block, src);
+    src.name = strdup(filename); // have to convert `const char *` to `char *`
+    make_string_from_dirent(req_data_block->data, src);
+    free(src.name);
+
     // increase the parent's size.
     parent_inode->size += FILE_NAME_ENTRY; // The number of bytes written by calling make_string_from_dirent will be equal to FILE_NAME_ENTRY as defined in minixfs.h
     return new_node;
@@ -180,15 +192,16 @@ ssize_t minixfs_virtual_read(file_system *fs, const char *path, void *buf,
     {
         // TODO implement the "info" virtual file here
         size_t blocks_used = 0;
-        superblock* superblock = fs->meta;
+        superblock *superblock = fs->meta;
         char *data_map = GET_DATA_MAP(superblock);
         uint64_t nblocks = superblock->dblock_count; // Multiples of 64 -> uint64_t
-        for (uint64_t b_idx = 0; b_idx < nblocks; ++b_idx) {
+        for (uint64_t b_idx = 0; b_idx < nblocks; ++b_idx)
+        {
             if (data_map[b_idx] == 1) // in use
-                blocks_used ++;
+                blocks_used++;
         }
 
-        char* block_info_str = block_info_string(blocks_used);
+        char *block_info_str = block_info_string(blocks_used);
         size_t to_read = get_min(strlen(block_info_str) - *off, count);
         memcpy(buf, block_info_str + *off, to_read);
         *off += to_read;
@@ -206,20 +219,24 @@ ssize_t minixfs_write(file_system *fs, const char *path, const void *buf,
 {
     // X marks the spot
     size_t MAX_SIZE = (NUM_DIRECT_BLOCKS + NUM_INDIRECT_BLOCKS) * sizeof(data_block);
-    if (*off + count > MAX_SIZE) {
+    if (*off + count > MAX_SIZE)
+    {
         errno = ENOSPC;
         return -1;
     }
 
-    inode* node = get_inode(fs, path);
-    if (!node) {
+    inode *node = get_inode(fs, path);
+    if (!node)
+    {
         node = minixfs_create_inode_for_path(fs, path);
     }
 
     size_t blocks_required = (*off + count) % sizeof(data_block);
-    if ((*off + count) % sizeof(data_block) != 0) blocks_required ++; // compute ceil
+    if ((*off + count) % sizeof(data_block) != 0)
+        blocks_required++; // compute ceil
 
-    if (-1 == minixfs_min_blockcount(fs, path, blocks_required)) { // not enough blocks & cannot allocate new block
+    if (-1 == minixfs_min_blockcount(fs, path, blocks_required))
+    { // not enough blocks & cannot allocate new block
         errno = ENOSPC;
         return -1;
     }
@@ -228,7 +245,8 @@ ssize_t minixfs_write(file_system *fs, const char *path, const void *buf,
     size_t b_off = (*off % sizeof(data_block));
 
     size_t bytes_wrote = 0;
-    while (bytes_wrote < count) {
+    while (bytes_wrote < count)
+    {
 
         data_block blk;
         if (b_idx < NUM_DIRECT_BLOCKS)
@@ -244,33 +262,25 @@ ssize_t minixfs_write(file_system *fs, const char *path, const void *buf,
         }
 
         size_t rem_to_write = sizeof(data_block) - b_off;
-        size_t to_write = min(rem_to_write, count - bytes_wrote);
+        size_t to_write = get_min(rem_to_write, count - bytes_wrote);
         // Perform write
         memcpy(blk.data + b_off, buf + bytes_wrote, to_write);
 
-        bytes_wrote += to_write; 
+        bytes_wrote += to_write;
         b_off = 0;
-        b_idx ++;
+        b_idx++;
     }
 
-    *off += count; 
+    *off += count;
     // If the file size has changed because of the write, the node's size should be updated.
     node->size = *off;
 
-    //This function should update the node's mtim and atim
+    // This function should update the node's mtim and atim
     clock_gettime(CLOCK_REALTIME, &node->atim);
     clock_gettime(CLOCK_REALTIME, &node->mtim);
     return bytes_wrote;
 }
 
-// HELPER
-int get_min(size_t x, size_t y)
-{
-    if (x < y)
-        return x;
-    else
-        return y;
-}
 
 ssize_t minixfs_read(file_system *fs, const char *path, void *buf, size_t count,
                      off_t *off)
@@ -285,7 +295,7 @@ ssize_t minixfs_read(file_system *fs, const char *path, void *buf, size_t count,
         errno = ENOENT;
         return -1;
     }
-    if (*off >= node->size) // no bytes to read, we are at the end of the file
+    if ((uint64_t) *off >= node->size) // no bytes to read, we are at the end of the file
         return 0;
 
     size_t b_idx = (*off / sizeof(data_block));
@@ -307,14 +317,14 @@ ssize_t minixfs_read(file_system *fs, const char *path, void *buf, size_t count,
             blk = fs->data_root[data_block_id];
         }
         size_t rem_to_read = sizeof(data_block) - b_off;
-        size_t to_read = min(rem_to_read, count - bytes_read);
+        size_t to_read = get_min(rem_to_read, count - bytes_read);
         memcpy(buf + bytes_read, blk.data + b_off, to_read); // read `to_read` bytes
 
         bytes_read += to_read;
         *off += to_read;
 
         b_off = 0;
-        b_idx ++;
+        b_idx++;
     }
 
     clock_gettime(CLOCK_REALTIME, &node->atim); // atim is access time, which is the time of last access or the last time a file was read(2).
