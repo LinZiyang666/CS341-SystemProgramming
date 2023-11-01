@@ -274,10 +274,9 @@ ssize_t minixfs_read(file_system *fs, const char *path, void *buf, size_t count,
 
     size_t b_idx = (*off / sizeof(data_block));
     size_t b_off = (*off % sizeof(data_block));
-    size_t end = get_min(*off + count, (size_t)node->size); // min()
 
     size_t bytes_read = 0;
-    while (*off < end)
+    while (bytes_read < count)
     {
         data_block blk;
         if (b_idx < NUM_DIRECT_BLOCKS)
@@ -292,12 +291,11 @@ ssize_t minixfs_read(file_system *fs, const char *path, void *buf, size_t count,
             blk = fs->data_root[data_block_id];
         }
         size_t rem_to_read = sizeof(data_block) - b_off;
-        size_t to_read = min(rem_to_read, end - *off);
-        memcpy(buf + bytes_read, blk.data, to_read); // read `to_read` bytes
+        size_t to_read = min(rem_to_read, count - bytes_read);
+        memcpy(buf + bytes_read, blk.data + b_off, to_read); // read `to_read` bytes
 
-
-        *off += to_read;
         bytes_read += to_read;
+        *off += to_read;
 
         b_off = 0;
         b_idx ++;
