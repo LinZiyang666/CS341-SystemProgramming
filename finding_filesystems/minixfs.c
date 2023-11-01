@@ -39,7 +39,7 @@ int minixfs_virtual_path_count =
     sizeof(minixfs_virtual_path_names) / sizeof(minixfs_virtual_path_names[0]);
 
 // HELPERS
-int get_min(size_t x, size_t y)
+size_t get_min(size_t x, size_t y)
 {
     if (x < y)
         return x;
@@ -56,7 +56,6 @@ data_block_number *get_indirects(file_system *fs, inode *parent_node)
 
 int minixfs_chmod(file_system *fs, char *path, int new_permissions)
 {
-    // puts("chmod called");
     // Thar she blows!
 
     inode *inode = get_inode(fs, path);
@@ -76,7 +75,6 @@ int minixfs_chmod(file_system *fs, char *path, int new_permissions)
 int minixfs_chown(file_system *fs, char *path, uid_t owner, gid_t group)
 {
     // Land ahoy!
-    puts("chown called");
     inode *inode = get_inode(fs, path);
     if (!inode) // does not exist
     {
@@ -101,7 +99,6 @@ int minixfs_chown(file_system *fs, char *path, uid_t owner, gid_t group)
 inode *minixfs_create_inode_for_path(file_system *fs, const char *path)
 {
 
-    // puts("create_inode_for_path called");
     // Land ahoy!
 
     inode *node = get_inode(fs, path);
@@ -194,7 +191,6 @@ ssize_t minixfs_virtual_read(file_system *fs, const char *path, void *buf,
     if (!strcmp(path, "info"))
     {
 
-        // puts("virtual_read called");
         // TODO implement the "info" virtual file here
         size_t blocks_used = 0;
         superblock *superblock = fs->meta;
@@ -219,7 +215,8 @@ ssize_t minixfs_virtual_read(file_system *fs, const char *path, void *buf,
     return -1;
 }
 
-int get_ceil (int quotient, int dividend) {
+int get_ceil(int quotient, int dividend)
+{
     return (quotient / dividend + (quotient % dividend != 0));
 }
 
@@ -227,7 +224,6 @@ ssize_t minixfs_write(file_system *fs, const char *path, const void *buf,
                       size_t count, off_t *off)
 {
     // X marks the spot
-    // puts("write called");
     size_t MAX_SIZE = (NUM_DIRECT_BLOCKS + NUM_INDIRECT_BLOCKS) * sizeof(data_block);
     if (*off + count > MAX_SIZE)
     {
@@ -240,8 +236,6 @@ ssize_t minixfs_write(file_system *fs, const char *path, const void *buf,
     {
         node = minixfs_create_inode_for_path(fs, path);
     }
-
-
 
     size_t blocks_required = get_ceil(*off + count, sizeof(data_block));
 
@@ -291,17 +285,29 @@ ssize_t minixfs_write(file_system *fs, const char *path, const void *buf,
     return bytes_wrote;
 }
 
+void *get_block(file_system *fs, inode *node, size_t b_idx)
+{
+    data_block_number* data_block_ptr;
+    if (b_idx < NUM_DIRECT_BLOCKS)
+    { // get start of Direct Data Block
+        data_block_ptr = node->direct;
+    }
+    else
+    { // get start of Indirect Data Block
+        data_block_number *indirects = get_indirects(fs, node);
+        data_block_ptr = indirects; 
+        b_idx -= NUM_DIRECT_BLOCKS; // NOTE: data block that is being referenced from the Indirect block
+    }
+    void *blk = (void*) (fs->data_root + data_block_ptr[b_idx]); // relative to `data_root`, get to the start of the block `blk` we want to read from, based on the `b_idx` 
+    return blk;
+}
 
 ssize_t minixfs_read(file_system *fs, const char *path, void *buf, size_t count,
                      off_t *off)
 {
-    // puts("read called");
     const char *virtual_path = is_virtual_path(path);
     if (virtual_path)
         return minixfs_virtual_read(fs, virtual_path, buf, count, off);
-
-    // puts("get_inode called");
-    // puts(path);
 
     inode *node = get_inode(fs, path);
     if (!node)
@@ -309,36 +315,30 @@ ssize_t minixfs_read(file_system *fs, const char *path, void *buf, size_t count,
         errno = ENOENT;
         return -1;
     }
-    // puts("off >= node->size");
-    if ((uint64_t) *off >= node->size) // no bytes to read, we are at the end of the file
+    if ((uint64_t)*off >= node->size) // no bytes to read, we are at the end of the file
         return 0;
 
-    size_t b_idx = (*off / sizeof(data_block));
+    count = get_min(count, node->size - *off); // ensure you don't overflow the file -> read only until the end `node->size` bytes
+
+    uint64_t b_idx = (*off / sizeof(data_block));
     size_t b_off = (*off % sizeof(data_block));
 
-    size_t bytes_read = 0;
+    void *blk = get_block(fs, node, b_idx) + b_off; // Retrieve the starting position where we wanna read in the block
+    size_t rem_to_read = sizeof(data_block) - b_off;
+    size_t to_read = get_min(rem_to_read, count);
+
+    memcpy(buf, blk, to_read);   // Read `to_read` bytes from the (offsetted) block to the buffer
+    size_t bytes_read = to_read; // we have already read `to_read` bytes
+    *off += to_read;             // advance offset in FILE
+    b_idx++;                     // go to the next block
+
     while (bytes_read < count)
     {
-        data_block blk;
-        if (b_idx < NUM_DIRECT_BLOCKS)
-        { // read Direct Data Block
-            data_block_number direct_block_id = node->direct[b_idx];
-            blk = fs->data_root[direct_block_id];
-        }
-        else
-        { // read Indirect Data Block
-            data_block_number *indirects = get_indirects(fs, node);
-            data_block_number data_block_id = indirects[b_idx - NUM_DIRECT_BLOCKS]; // NOTE: data block that is being referenced from the Indirect block
-            blk = fs->data_root[data_block_id];
-        }
-        size_t rem_to_read = sizeof(data_block) - b_off;
-        size_t to_read = get_min(rem_to_read, count - bytes_read);
-        memcpy(buf + bytes_read, blk.data + b_off, to_read); // read `to_read` bytes
-
+        blk = get_block(fs, node, b_idx); // No more offset in the block
+        size_t to_read = get_min(sizeof(data_block), count - bytes_read);
+        memcpy(buf + bytes_read, blk, to_read); // read `to_read` bytes
         bytes_read += to_read;
         *off += to_read;
-
-        b_off = 0;
         b_idx++;
     }
 
