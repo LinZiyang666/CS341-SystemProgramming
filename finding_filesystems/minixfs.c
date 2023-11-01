@@ -219,6 +219,10 @@ ssize_t minixfs_virtual_read(file_system *fs, const char *path, void *buf,
     return -1;
 }
 
+int get_ceil (int quotient, int dividend) {
+    return (quotient / dividend + (quotient % dividend != 0));
+}
+
 ssize_t minixfs_write(file_system *fs, const char *path, const void *buf,
                       size_t count, off_t *off)
 {
@@ -237,9 +241,9 @@ ssize_t minixfs_write(file_system *fs, const char *path, const void *buf,
         node = minixfs_create_inode_for_path(fs, path);
     }
 
-    size_t blocks_required = (*off + count) / sizeof(data_block);
-    if ((*off + count) % sizeof(data_block) != 0)
-        blocks_required++; // compute ceil
+
+
+    size_t blocks_required = get_ceil(*off + count, sizeof(data_block));
 
     if (-1 == minixfs_min_blockcount(fs, path, blocks_required))
     { // not enough blocks & cannot allocate new block
