@@ -46,12 +46,39 @@ size_t get_min(size_t x, size_t y)
     else
         return y;
 }
+size_t get_max(size_t x, size_t y)
+{
+    if (x > y)
+        return x;
+    else
+        return y;
+}
+
 
 // use offset of parent_inode->indirect to get to the start of `Indirect Data Blocks` region
 data_block_number *get_indirects(file_system *fs, inode *parent_node)
 {
     data_block_number *indirect_blocks = (data_block_number *)(fs->data_root + parent_node->indirect);
     return indirect_blocks;
+}
+
+// Retrieve blcok from inode `node` located in file system `fs` that start at block index `b_idx`
+// RETURN: pointer to the starting point on the block
+void *get_block(file_system *fs, inode *node, size_t b_idx)
+{
+    data_block_number* data_block_ptr;
+    if (b_idx < NUM_DIRECT_BLOCKS)
+    { // get start of Direct Data Block
+        data_block_ptr = node->direct;
+    }
+    else
+    { // get start of Indirect Data Block
+        data_block_number *indirects = get_indirects(fs, node);
+        data_block_ptr = indirects; 
+        b_idx -= NUM_DIRECT_BLOCKS; // NOTE: data block that is being referenced from the Indirect block
+    }
+    void *blk = (void*) (fs->data_root + data_block_ptr[b_idx]); // relative to `data_root`, get to the start of the block `blk` we want to read from, based on the `b_idx` 
+    return blk;
 }
 
 int minixfs_chmod(file_system *fs, char *path, int new_permissions)
@@ -224,6 +251,8 @@ ssize_t minixfs_write(file_system *fs, const char *path, const void *buf,
                       size_t count, off_t *off)
 {
     // X marks the spot
+    // NOTE: we are allowed to write over the node->size, which will mean that we will expand our file => node->size = max(node->size, *off + count)
+    //                                                                                                                   --wrote inside file--; --wrote after file end-- 
     size_t MAX_SIZE = (NUM_DIRECT_BLOCKS + NUM_INDIRECT_BLOCKS) * sizeof(data_block);
     if (*off + count > MAX_SIZE)
     {
@@ -247,37 +276,27 @@ ssize_t minixfs_write(file_system *fs, const char *path, const void *buf,
 
     size_t b_idx = (*off / sizeof(data_block));
     size_t b_off = (*off % sizeof(data_block));
+    
+    // `to_write` bytes possible to write in from the current block
+    size_t to_write = get_min(count, sizeof(data_block) - b_off);
+    void* blk = get_block(fs, node, b_idx) + b_off;
+    memcpy(blk, buf, to_write);
+    b_off = 0;
+    size_t bytes_wrote = to_write;
+    *off += to_write;
+    b_idx ++;
 
-    size_t bytes_wrote = 0;
-    while (bytes_wrote < count)
-    {
-
-        data_block blk;
-        if (b_idx < NUM_DIRECT_BLOCKS)
-        { // read Direct Data Block
-            data_block_number direct_block_id = node->direct[b_idx];
-            blk = fs->data_root[direct_block_id];
-        }
-        else
-        { // read Indirect Data Block
-            data_block_number *indirects = get_indirects(fs, node);
-            data_block_number data_block_id = indirects[b_idx - NUM_DIRECT_BLOCKS]; // NOTE: data block that is being referenced from the Indirect block
-            blk = fs->data_root[data_block_id];
-        }
-
-        size_t rem_to_write = sizeof(data_block) - b_off;
-        size_t to_write = get_min(rem_to_write, count - bytes_wrote);
-        // Perform write
-        memcpy(blk.data + b_off, buf + bytes_wrote, to_write);
-
+    while (bytes_wrote < count) {
+        blk = get_block(fs, node, b_idx);
+        to_write = get_min(sizeof(data_block), count - bytes_wrote); // check if you can write an entire block, if not (it exceeds the max amount of bytes the user asked to write: count - bytes_wrote, write those remaining instead )
+        memcpy(blk, buf, to_write);
         bytes_wrote += to_write;
-        b_off = 0;
-        b_idx++;
+        *off += to_write;
+        b_idx ++;
     }
-
-    *off += count;
+    
     // If the file size has changed because of the write, the node's size should be updated.
-    node->size = *off;
+    node->size = get_max(node->size, *off); // if the count bytes that were copied at offset `initial_off` exceeded the file limit (*off = *initial_off + count) => increase the file: node->size = *off > prev node size
 
     // This function should update the node's mtim and atim
     clock_gettime(CLOCK_REALTIME, &node->atim);
@@ -285,22 +304,6 @@ ssize_t minixfs_write(file_system *fs, const char *path, const void *buf,
     return bytes_wrote;
 }
 
-void *get_block(file_system *fs, inode *node, size_t b_idx)
-{
-    data_block_number* data_block_ptr;
-    if (b_idx < NUM_DIRECT_BLOCKS)
-    { // get start of Direct Data Block
-        data_block_ptr = node->direct;
-    }
-    else
-    { // get start of Indirect Data Block
-        data_block_number *indirects = get_indirects(fs, node);
-        data_block_ptr = indirects; 
-        b_idx -= NUM_DIRECT_BLOCKS; // NOTE: data block that is being referenced from the Indirect block
-    }
-    void *blk = (void*) (fs->data_root + data_block_ptr[b_idx]); // relative to `data_root`, get to the start of the block `blk` we want to read from, based on the `b_idx` 
-    return blk;
-}
 
 ssize_t minixfs_read(file_system *fs, const char *path, void *buf, size_t count,
                      off_t *off)
