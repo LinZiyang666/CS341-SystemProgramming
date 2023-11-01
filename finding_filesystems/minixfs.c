@@ -86,7 +86,7 @@ int minixfs_chown(file_system *fs, char *path, uid_t owner, gid_t group)
 // use offset of parent_inode->indirect to get to the start of `Indirect Data Blocks` region
 data_block_number *get_indirects(file_system *fs, inode *parent_node)
 {
-    data_block_number *indirect_blocks = (data_block_number *)(fs->data_root + parent_node->indirect); 
+    data_block_number *indirect_blocks = (data_block_number *)(fs->data_root + parent_node->indirect);
     return indirect_blocks;
 }
 
@@ -135,7 +135,7 @@ inode *minixfs_create_inode_for_path(file_system *fs, const char *path)
             req_data_block = fs->data_root + parent_inode->direct[num_blocks];
         }
         else
-        {                                                                                                 // the last data block is an Indirect Block
+        { // the last data block is an Indirect Block
             data_block_number *indirects = get_indirects(fs, parent_inode);
             req_data_block = fs->data_root + indirects[num_blocks - NUM_DIRECT_BLOCKS];
         }
@@ -150,8 +150,8 @@ inode *minixfs_create_inode_for_path(file_system *fs, const char *path)
         data_block_number new_db_idx;
         if (parent_inode->indirect == UNASSIGNED_NODE)
             new_db_idx = add_data_block_to_inode(fs, parent_inode);
-            if (new_db_idx == -1) // FULL
-                return NULL;
+        if (new_db_idx == -1) // FULL
+            return NULL;
         else
         {
             data_block_number *indirects = get_indirects(fs, parent_inode);
@@ -163,12 +163,12 @@ inode *minixfs_create_inode_for_path(file_system *fs, const char *path)
         req_data_block = fs->data_root + new_db_idx;
     }
 
-    // add a new dirent to the parent 
+    // add a new dirent to the parent
     minixfs_dirent src;
     src.inode_num = new_node_idx;
     src.name = filename;
     make_string_from_dirent(req_data_block, src);
-    //increase the parent's size.
+    // increase the parent's size.
     parent_inode->size += FILE_NAME_ENTRY; // The number of bytes written by calling make_string_from_dirent will be equal to FILE_NAME_ENTRY as defined in minixfs.h
     return new_node;
 }
@@ -189,7 +189,19 @@ ssize_t minixfs_write(file_system *fs, const char *path, const void *buf,
                       size_t count, off_t *off)
 {
     // X marks the spot
+
+    // If the file size has changed because of the write, the node's size should be updated.
+
     return -1;
+}
+
+// HELPER
+int get_min(size_t x, size_t y)
+{
+    if (x < y)
+        return x;
+    else
+        return y;
 }
 
 ssize_t minixfs_read(file_system *fs, const char *path, void *buf, size_t count,
@@ -198,6 +210,47 @@ ssize_t minixfs_read(file_system *fs, const char *path, void *buf, size_t count,
     const char *virtual_path = is_virtual_path(path);
     if (virtual_path)
         return minixfs_virtual_read(fs, virtual_path, buf, count, off);
-    // 'ere be treasure!
-    return -1;
+
+    inode *node = get_inode(fs, path);
+    if (1 != valid_filename(path) || !node)
+    {
+        errno = ENOENT;
+        return -1;
+    }
+    if (*off >= node->size) // no bytes to read, we are at the end of the file
+        return 0;
+
+    size_t b_idx = (*off / sizeof(data_block));
+    size_t b_off = (*off % sizeof(data_block));
+    size_t end = get_min(*off + count, (size_t)node->size); // min()
+
+    size_t bytes_read = 0;
+    while (*off < end)
+    {
+        data_block blk;
+        if (b_idx < NUM_DIRECT_BLOCKS)
+        { // read Direct Data Block
+            data_block_number direct_block_id = node->direct[b_idx];
+            blk = fs->data_root[direct_block_id];
+        }
+        else
+        { // read Indirect Data Block
+            data_block_number *indirects = get_indirects(fs, node);
+            data_block_number data_block_id = indirects[b_idx - NUM_DIRECT_BLOCKS]; // NOTE: data block that is being referenced from the Indirect block
+            blk = fs->data_root[data_block_id];
+        }
+        size_t rem_to_read = sizeof(data_block) - b_off;
+        size_t to_read = min(rem_to_read, end - *off);
+        memcpy(buf + bytes_read, blk.data, to_read); // read `to_read` bytes
+
+
+        *off += to_read;
+        bytes_read += to_read;
+
+        b_off = 0;
+        b_idx ++;
+    }
+
+    clock_gettime(CLOCK_REALTIME, &node->atim); // atim is access time, which is the time of last access or the last time a file was read(2).
+    return bytes_read;
 }
