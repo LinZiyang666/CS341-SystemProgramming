@@ -56,6 +56,7 @@ data_block_number *get_indirects(file_system *fs, inode *parent_node)
 
 int minixfs_chmod(file_system *fs, char *path, int new_permissions)
 {
+    // puts("chmod called");
     // Thar she blows!
 
     inode *inode = get_inode(fs, path);
@@ -75,6 +76,7 @@ int minixfs_chmod(file_system *fs, char *path, int new_permissions)
 int minixfs_chown(file_system *fs, char *path, uid_t owner, gid_t group)
 {
     // Land ahoy!
+    puts("chown called");
     inode *inode = get_inode(fs, path);
     if (!inode) // does not exist
     {
@@ -98,13 +100,12 @@ int minixfs_chown(file_system *fs, char *path, uid_t owner, gid_t group)
 
 inode *minixfs_create_inode_for_path(file_system *fs, const char *path)
 {
+
+    // puts("create_inode_for_path called");
     // Land ahoy!
 
     inode *node = get_inode(fs, path);
     if (node) // inode already exists
-        return NULL;
-    // the path is NOT a valid pathname
-    if (1 != valid_filename(path))
         return NULL;
     // inode cannot be created
 
@@ -115,6 +116,10 @@ inode *minixfs_create_inode_for_path(file_system *fs, const char *path)
     // find its parent inode
     const char *filename;
     inode *parent_inode = parent_directory(fs, path, &filename);
+    // the path is NOT a valid pathname
+    if (1 != valid_filename(filename))
+        return NULL;
+
     data_block_number num_blocks = (parent_inode->size / sizeof(data_block)); // fully-occupied blocks
     size_t rem = (parent_inode->size % sizeof(data_block));
 
@@ -188,6 +193,8 @@ ssize_t minixfs_virtual_read(file_system *fs, const char *path, void *buf,
 {
     if (!strcmp(path, "info"))
     {
+
+        // puts("virtual_read called");
         // TODO implement the "info" virtual file here
         size_t blocks_used = 0;
         superblock *superblock = fs->meta;
@@ -216,6 +223,7 @@ ssize_t minixfs_write(file_system *fs, const char *path, const void *buf,
                       size_t count, off_t *off)
 {
     // X marks the spot
+    // puts("write called");
     size_t MAX_SIZE = (NUM_DIRECT_BLOCKS + NUM_INDIRECT_BLOCKS) * sizeof(data_block);
     if (*off + count > MAX_SIZE)
     {
@@ -283,16 +291,21 @@ ssize_t minixfs_write(file_system *fs, const char *path, const void *buf,
 ssize_t minixfs_read(file_system *fs, const char *path, void *buf, size_t count,
                      off_t *off)
 {
+    // puts("read called");
     const char *virtual_path = is_virtual_path(path);
     if (virtual_path)
         return minixfs_virtual_read(fs, virtual_path, buf, count, off);
 
+    // puts("get_inode called");
+    // puts(path);
+
     inode *node = get_inode(fs, path);
-    if (1 != valid_filename(path) || !node)
+    if (!node)
     {
         errno = ENOENT;
         return -1;
     }
+    // puts("off >= node->size");
     if ((uint64_t) *off >= node->size) // no bytes to read, we are at the end of the file
         return 0;
 
