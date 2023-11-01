@@ -189,10 +189,62 @@ ssize_t minixfs_write(file_system *fs, const char *path, const void *buf,
                       size_t count, off_t *off)
 {
     // X marks the spot
+    size_t MAX_SIZE = (NUM_DIRECT_BLOCKS + NUM_INDIRECT_BLOCKS) * sizeof(data_block);
+    if (*off + count > MAX_SIZE) {
+        errno = ENOSPC;
+        return -1;
+    }
 
+    inode* node = get_inode(fs, path);
+    if (!node) {
+        node = minixfs_create_inode_for_path(fs, path);
+    }
+
+    size_t blocks_required = (*off + count) % sizeof(data_block);
+    if ((*off + count) % sizeof(data_block) != 0) blocks_required ++; // compute ceil
+
+    if (-1 == minixfs_min_blockcount(fs, path, blocks_required)) { // not enough blocks & cannot allocate new block
+        errno = ENOSPC;
+        return -1;
+    }
+
+    size_t b_idx = (*off / sizeof(data_block));
+    size_t b_off = (*off % sizeof(data_block));
+
+    size_t bytes_wrote = 0;
+    while (bytes_wrote < count) {
+
+        data_block blk;
+        if (b_idx < NUM_DIRECT_BLOCKS)
+        { // read Direct Data Block
+            data_block_number direct_block_id = node->direct[b_idx];
+            blk = fs->data_root[direct_block_id];
+        }
+        else
+        { // read Indirect Data Block
+            data_block_number *indirects = get_indirects(fs, node);
+            data_block_number data_block_id = indirects[b_idx - NUM_DIRECT_BLOCKS]; // NOTE: data block that is being referenced from the Indirect block
+            blk = fs->data_root[data_block_id];
+        }
+
+        size_t rem_to_write = sizeof(data_block) - b_off;
+        size_t to_write = min(rem_to_write, count - bytes_wrote);
+        // Perform write
+        memcpy(blk.data + b_off, buf + bytes_wrote, to_write);
+
+        bytes_wrote += to_write; 
+        b_off = 0;
+        b_idx ++;
+    }
+
+    *off += count; 
     // If the file size has changed because of the write, the node's size should be updated.
+    node->size = *off;
 
-    return -1;
+    //This function should update the node's mtim and atim
+    clock_gettime(CLOCK_REALTIME, &node->atim);
+    clock_gettime(CLOCK_REALTIME, &node->mtim);
+    return bytes_wrote;
 }
 
 // HELPER
