@@ -179,6 +179,22 @@ ssize_t minixfs_virtual_read(file_system *fs, const char *path, void *buf,
     if (!strcmp(path, "info"))
     {
         // TODO implement the "info" virtual file here
+        size_t blocks_used = 0;
+        superblock* superblock = fs->meta;
+        char *data_map = GET_DATA_MAP(superblock);
+        uint64_t nblocks = superblock->dblock_count; // Multiples of 64 -> uint64_t
+        for (uint64_t b_idx = 0; b_idx < nblocks; ++b_idx) {
+            if (data_map[b_idx] == 1) // in use
+                blocks_used ++;
+        }
+
+        char* block_info_str = block_info_string(blocks_used);
+        size_t to_read = get_min(strlen(block_info_str) - *off, count);
+        memcpy(buf, block_info_str + *off, to_read);
+        *off += to_read;
+
+        size_t bytes_read = to_read;
+        return bytes_read;
     }
 
     errno = ENOENT;
