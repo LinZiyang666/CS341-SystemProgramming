@@ -30,7 +30,7 @@ static struct timespec start, end;
 void set_default_params()
 {
     in = stdin;
-    out = stdin;
+    out = stdout;
     block_size = 512;
     block_count = -1;
     p_blocks = k_blocks = 0;
