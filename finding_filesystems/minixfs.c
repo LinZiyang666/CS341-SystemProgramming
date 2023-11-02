@@ -58,6 +58,7 @@ size_t get_max(size_t x, size_t y)
 // use offset of parent_inode->indirect to get to the start of `Indirect Data Blocks` region
 data_block_number *get_indirects(file_system *fs, inode *parent_node)
 {
+    // parent_node -> indirect: integer that `points` to the first Indirect Block (if offsetted relative to `fs->data_root`)
     data_block_number *indirect_blocks = (data_block_number *)(fs->data_root + parent_node->indirect);
     return indirect_blocks;
 }
@@ -218,7 +219,6 @@ ssize_t minixfs_virtual_read(file_system *fs, const char *path, void *buf,
     if (!strcmp(path, "info"))
     {
 
-        // TODO implement the "info" virtual file here
         size_t blocks_used = 0;
         superblock *superblock = fs->meta;
         char *data_map = GET_DATA_MAP(superblock);
@@ -251,7 +251,7 @@ ssize_t minixfs_write(file_system *fs, const char *path, const void *buf,
                       size_t count, off_t *off)
 {
     // X marks the spot
-    // NOTE: we are allowed to write over the node->size, which will mean that we will expand our file => node->size = max(node->size, *off + count)
+    // NOTE: we are allowed to write over the node->size, which will mean that we will expand our file => node->size = max(node->size, *off)
     //                                                                                                                   --wrote inside file--; --wrote after file end-- 
     size_t MAX_SIZE = (NUM_DIRECT_BLOCKS + NUM_INDIRECT_BLOCKS) * sizeof(data_block);
     if (*off + count > MAX_SIZE)
