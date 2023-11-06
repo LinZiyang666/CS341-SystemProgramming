@@ -52,9 +52,6 @@ void cleanup_resources();
 
 int main(int argc, char **argv)
 {
-    // Clear the umask to create a file with all permissions
-    // umask(0);
-
     // Good luck!
     // parse args
     parsed_args = parse_args(argc, argv);
@@ -289,9 +286,14 @@ int read_server_response(verb req)
 
     }
     else { //TODO: handle ERROR from server
-        response = realloc(response, strlen(ERROR) + 1);
-        read_from_socket(server_fd, response + status_bytes_read, strlen(ERROR) - status_bytes_read);
-        if (strcmp(response, ERROR) == 0) {
+        char *err_response = calloc(1, strlen(ERROR) + 1);
+        strcpy(err_response, response);
+        free(response); 
+
+        // fprintf(stderr, "Before %s\n", err_response);
+        read_from_socket(server_fd, err_response + status_bytes_read, strlen(ERROR) - status_bytes_read);
+        // fprintf(stderr, "After %s\n", err_response);
+        if (strcmp(err_response, ERROR) == 0) {
             fprintf(stdout, "%s\n", ERROR); // TODO: check if needed
             char error_msg[MAX_ERROR_LEN + 1] = {0};
             int read_error = read_from_socket(server_fd, error_msg, MAX_ERROR_LEN);
@@ -301,9 +303,12 @@ int read_server_response(verb req)
             print_error_message(error_msg);
         }
         else {
+            // fprintf(stderr, "%s\n", err_response);
             print_invalid_response();
         }
 
+        free(err_response);
+        return 0;
     }
 
     free(response);
