@@ -229,8 +229,10 @@ int read_server_response(verb req)
             char buffer[size + 6]; 
             memset(buffer, 0, size + 6);
             status_bytes_read = read_from_socket(server_fd, response, size + 5);
-            if (is_error(status_bytes_read, size))
+            if (is_error(status_bytes_read, size)) {
+                free(response);
                 return -1;
+            }
             else fprintf(stdout, "%zu%s", size, buffer); // TODO: check if correct format
         }
 
@@ -242,6 +244,7 @@ int read_server_response(verb req)
             FILE *local_file = fopen(local, "w+"); // TODO: check if flag is correct
             if (!local_file) {
                 perror("fopen() failed in GET OK");
+                free(response);
                 return -1; 
             }
 
@@ -261,19 +264,35 @@ int read_server_response(verb req)
                 bytes_read += bytes_read_from_socket;
             }
 
-            if (is_error(bytes_read, size))
+            if (is_error(bytes_read, size)) {
+                free(response);
                 return -1;
+                }
 
             fclose(local_file);
         }
 
     }
-
     else { //TODO: handle ERROR from server
+        response = realloc(response, strlen(ERROR) + 1);
+        read_from_socket(server_fd, response + status_bytes_read, strlen(ERROR) - status_bytes_read);
+        if (strcmp(response, ERROR) == 0) {
+            fprintf(stdout, "%s\n", ERROR); // TODO: check if needed
+            char error_msg[MAX_ERROR_LEN + 1] = {0};
+            int read_error = read_from_socket(server_fd, error_msg, MAX_ERROR_LEN);
+            if (0 == read_error) {   
+                print_connection_closed();
+            }
+            print_error_message(error_msg);
+        }
+        else {
+            print_invalid_response();
+        }
 
     }
 
-    return -1;
+    free(response);
+    return 0;
 }
 
 void cleanup_resources()
