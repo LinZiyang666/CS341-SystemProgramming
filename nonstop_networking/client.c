@@ -52,6 +52,9 @@ void cleanup_resources();
 
 int main(int argc, char **argv)
 {
+    // Clear the umask to create a file with all permissions
+    // umask(0);
+
     // Good luck!
     // parse args
     parsed_args = parse_args(argc, argv);
@@ -117,7 +120,7 @@ int connect_to_server(char *host, char *port)
     }
 
     freeaddrinfo(res);
-    fprintf(stderr, "Succesfully connected");
+    // fprintf(stderr, "Succesfully connected");
     return sock_fd;
 }
 
@@ -139,7 +142,7 @@ int run_client_request(verb req)
     }
 
     size_t bytes_to_write = strlen(client_request);
-    int bytes_wrote = write_to_socket(server_fd, client_request, bytes_to_write);
+    size_t bytes_wrote = write_to_socket(server_fd, client_request, bytes_to_write);
 
     if (bytes_wrote < bytes_to_write)
     { // Connection got closed while we were writting our data; encapsulates the case when bytes_wrote == -1
@@ -157,6 +160,7 @@ int run_client_request(verb req)
         if (-1 == put_err)
             return -1;
     }
+    return 0;
 }
 
 int perform_put()
@@ -168,7 +172,7 @@ int perform_put()
     if (-1 == stat_err)
         return -1;
 
-    off_t local_size = stat_local.st_size;
+    size_t local_size = stat_local.st_size;
     // Step1: write # of bytes the server should expect to receive; sizeof(size_t) = 8
     // Interpret the `off_t local_size` as a `char*`, so that the `write_to_socket` method can write byte by byte from this integer
     // effectively saying, "Here's where you can start reading bytes to send over the socket."
@@ -190,7 +194,7 @@ int perform_put()
         // Read from `local_file` into `buffer`
         fread(buffer, 1, new_bytes_wrote, local_file);
         //Write from `buffer` to socket
-        int bytes_wrote_to_socket = write_to_socket(server_fd, buffer, new_bytes_wrote);
+        size_t bytes_wrote_to_socket = write_to_socket(server_fd, buffer, new_bytes_wrote);
         if (bytes_wrote_to_socket < new_bytes_wrote) // connection got closed in the meantime
         {
             print_connection_closed();
@@ -228,12 +232,15 @@ int read_server_response(verb req)
             read_from_socket(server_fd, (char*)&size, sizeof(size_t)); // read the size that we expect to receive, that we will have to read later on
             char buffer[size + 6]; 
             memset(buffer, 0, size + 6);
-            status_bytes_read = read_from_socket(server_fd, response, size + 5);
+            status_bytes_read = read_from_socket(server_fd, buffer, size + 5);
             if (is_error(status_bytes_read, size)) {
                 free(response);
                 return -1;
             }
-            else fprintf(stdout, "%zu%s", size, buffer); // TODO: check if correct format
+            else {
+                fprintf(stdout, "%zu%s", size, buffer); // TODO: check if correct format
+                fflush(stdout);
+            }
         }
 
         if (req == GET) { 
@@ -247,6 +254,14 @@ int read_server_response(verb req)
                 free(response);
                 return -1; 
             }
+
+            if (chmod(local, 0777) == -1) // You should create the file with all permissions set (r-w-x for all users groups). 
+            {
+                perror("chmod");
+                free(response);
+                return -1;
+            }
+
 
             size_t size = 0;
             read_from_socket(server_fd, (char *)&size, sizeof(size_t));
