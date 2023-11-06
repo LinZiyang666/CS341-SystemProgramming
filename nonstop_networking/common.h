@@ -5,8 +5,6 @@
 #pragma once
 #include <stddef.h>
 #include <sys/types.h>
-#include "format.h"
-#include <errno.h>
 
 #define LOG(...)                      \
     do {                              \
@@ -18,6 +16,7 @@ typedef enum { GET, PUT, DELETE, LIST, V_UNKNOWN } verb;
 
 
 // `read_from_socket` and `write_to_socket` taken from `charming_chatroom` lab assignment impl.
+// used by the client to write to the socket the server exposed (send data client -> server)
 
 // Reads `count` bytes from `socket` into the `buffer` 
 // RET: `bytes_read`: the number of bytes succesfully read from the buffer, or -1 in case of an error
