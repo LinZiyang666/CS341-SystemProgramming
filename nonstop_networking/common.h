@@ -8,6 +8,8 @@
 
 #define MAX_HEADER_LEN 1024
 #define MAX_FILENAME 256
+#define MAX_ERROR_LEN 32
+
 static char *OK = "OK\n";
 static char *ERROR = "ERROR\n";
 
