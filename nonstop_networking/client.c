@@ -15,9 +15,9 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
+#include <errno.h>
 
-
-static char **args;
+static char **parsed_args; // NOTE: make sure to use these instead of argv[] afetr `parse_args`
 static int server_fd; // socket exposed by server
 
 char **parse_args(int argc, char **argv);
@@ -34,16 +34,16 @@ int main(int argc, char **argv)
 {
     // Good luck!
     // parse args
-    args = parse_args(argc, argv);
+    parsed_args = parse_args(argc, argv);
     // check args
-    verb req = check_args(args);
+    verb req = check_args(parsed_args);
     if (req == V_UNKNOWN)
     {
         exit(1);
     }
 
-    char *host = argv[0];
-    char *port = argv[1];
+    char *host = parsed_args[0];
+    char *port = parsed_args[1];
     server_fd = connect_to_server(host, port);
     if (-1 == server_fd)
     { // unable to connect to the erver
@@ -70,39 +70,55 @@ int connect_to_server(char *host, char *port)
 {
 
     struct addrinfo hints, *res;
-    memset((void*) &hints, 0, sizeof(hints));
+    memset((void *)&hints, 0, sizeof(hints));
 
-    hints.ai_family = AF_INET; // IPv4
+    hints.ai_family = AF_INET;       // IPv4
     hints.ai_socktype = SOCK_STREAM; // TCP
 
     int gai = getaddrinfo(host, port, &hints, &res); // obtain the address info of the server
-    if (gai) { // err.
+    if (gai)
+    { // err.
         fprintf(stderr, "getaddrinfo failed w/: %s", gai_strerror(gai));
         return -1;
     }
 
     int sock_fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-    if (-1 == sock_fd) {
+    if (-1 == sock_fd)
+    {
         perror("Client's socket failed");
         return -1;
     }
 
     int conn = connect(sock_fd, res->ai_addr, res->ai_addrlen);
-    if (-1 == conn) {
-        perorr("connect failed");
-       return -1;
+    if (-1 == conn)
+    {
+        perror("connect failed");
+        return -1;
     }
 
     freeaddrinfo(res);
+    fprintf(stderr, "Succesfully connected");
     return sock_fd;
 }
+
+int run_client_request(verb req)
+{
+    //TODO;
+    return -1;
+}
+int read_server_response(verb req) 
+{
+    //TODO;
+    return -1;
+}
+
 
 void cleanup_resources()
 {
     shutdown(server_fd, SHUT_RD); // we are done listening to the server socket
     close(server_fd);             // close server socket
-    free(args);                   // args were calloc'd in `parse_args`
-    args = NULL;                  // ensure use-after-free safety
+    free(parsed_args);                   // `parsed_args` were calloc'd in `parse_args`
+    parsed_args = NULL;                  // ensure use-after-free safety
 }
 
 /**

@@ -5,6 +5,7 @@
 #include "common.h"
 #include "format.h"
 #include <errno.h>
+#include <unistd.h>
 
 #define MAX_HEADER_LEN 1024
 
