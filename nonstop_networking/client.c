@@ -183,7 +183,7 @@ int perform_put()
     size_t bytes_wrote = 0;
     while (bytes_wrote < local_size)
     {
-        size_t new_bytes_wrote = get_min(local_size - bytes_wrote, (size_t)1024); // ensure we don't wirte more than `local_size` bytes, while keeping writing bytes 1024 by 1024
+        size_t new_bytes_wrote = get_min(local_size - bytes_wrote, (size_t)MAX_HEADER_LEN); // ensure we don't wirte more than `local_size` bytes, while keeping writing bytes 1024 by 1024
         // should maintain some (reasonably) fixed size buffers (say, 1024 bytes), and reuse these buffers as you send or receive data over time.
         char buffer[MAX_HEADER_LEN + 1];
 
@@ -213,7 +213,65 @@ int perform_put()
 
 int read_server_response(verb req)
 {
-    // TODO;
+    // TODO: check correctness & discuss at LAB
+    char *response = calloc(1, strlen(OK) + 1);
+    size_t status_bytes_read = read_from_socket(server_fd, response, strlen(OK));  // We will use this variable to read the remaining `strlen(ERROR) - status_bytes_read` bytes in the case of ERROR
+
+    if (strcmp(response, OK) == 0) { // Succesful request returned from the server
+        fprintf(stdout, "%s\n", OK); // TODO: check if needed
+
+        if (req == PUT || req == DELETE)
+            print_success();
+        if (req == LIST) { // For LIST, binary data from the server should be printed to STDOUT, each file on a separate line. 
+
+            size_t size = 0;
+            read_from_socket(server_fd, (char*)&size, sizeof(size_t)); // read the size that we expect to receive, that we will have to read later on
+            char buffer[size + 6]; 
+            memset(buffer, 0, size + 6);
+            status_bytes_read = read_from_socket(server_fd, response, size + 5);
+            if (is_error(status_bytes_read, size))
+                return -1;
+            else fprintf(stdout, "%zu%s", size, buffer); // TODO: check if correct format
+        }
+
+        if (req == GET) { 
+            // For GET, binary data should be written to the [local] file specified when the user ran the command. 
+            // If not created, create the file. If it exists, truncate the file. You should create the file with all permissions set (r-w-x for all users groups).
+            // Read from socket, write to `local_file`
+            char *local = parsed_args[4]; // path to local file
+            FILE *local_file = fopen(local, "w+"); // TODO: check if flag is correct
+            if (!local_file) {
+                perror("fopen() failed in GET OK");
+                return -1; 
+            }
+
+            size_t size = 0;
+            read_from_socket(server_fd, (char *)&size, sizeof(size_t));
+            size_t bytes_read = 0;
+            while (bytes_read < size + 5) { // TODO: check
+                size_t new_bytes_read = get_min(size + 5 - bytes_read, MAX_HEADER_LEN); 
+                char buffer[MAX_HEADER_LEN + 1] = {0}; // ChatGPT: , if you're simply initializing a freshly declared array, the direct initializer is more concise and idiomatic C.
+                size_t bytes_read_from_socket = read_from_socket(server_fd, buffer, new_bytes_read); // read from socket
+
+                if (bytes_read_from_socket == 0) // finished reading | connection got closed
+                    break;
+
+                fwrite(buffer, 1, bytes_read_from_socket, local_file); // write to `local_file`
+
+                bytes_read += bytes_read_from_socket;
+            }
+
+            if (is_error(bytes_read, size))
+                return -1;
+
+            fclose(local_file);
+        }
+
+    }
+
+    else { //TODO: handle ERROR from server
+
+    }
 
     return -1;
 }
