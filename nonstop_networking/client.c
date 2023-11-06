@@ -14,11 +14,12 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <netdb.h>
 #include <errno.h>
 
 static char **parsed_args; // NOTE: make sure to use these instead of argv[] afetr `parse_args`
-static int server_fd; // socket exposed by server
+static int server_fd;      // socket exposed by server
 
 char **parse_args(int argc, char **argv);
 verb check_args(char **args);
@@ -26,7 +27,26 @@ verb check_args(char **args);
 // Establish TCP connection from client to server
 // RET: server_fd (file descriptor that describes the server socket) on success, -1 on error
 int connect_to_server(char *host, char *port);
+
+// Construct the client request and write it to the socket, so that the SERVER can receive it.
+// If PUT: to write size and binary data to server
+// Once the client has sent all the data to the server, it should perform a ‘half close’ by closing the write half of the socket (hint: shutdown()).
+// This ensures that the server will eventually realize that the client has stopped sending data, and can move forward with processing the request
+// RET: 0 if succesfull, -1 if error
 int run_client_request(verb req);
+
+// Handles the PUT case - transfer # of bytes server should expect & actual data
+// Reads from local indicated file, and write data to a buffer 1024 by 1024 bytes (or rem_bytes if rem_bytes < 1024); and then writes to the socket of the server
+int perform_put();
+
+size_t get_min(size_t x, size_t y)
+{
+    if (x <= y)
+        return x;
+    else
+        return y;
+}
+
 int read_server_response(verb req);
 void cleanup_resources();
 
@@ -103,22 +123,107 @@ int connect_to_server(char *host, char *port)
 
 int run_client_request(verb req)
 {
-    //TODO;
-    return -1;
-}
-int read_server_response(verb req) 
-{
-    //TODO;
-    return -1;
+    char *client_request = NULL;
+    char *cmd = parsed_args[2];
+    char *remote = parsed_args[3];
+
+    if (req == LIST)
+    {                                                     // "LIST\n"
+        client_request = calloc(1, strlen("LIST\n") + 1); // +1 for '\0'
+        sprintf(client_request, "%s\n", cmd);
+    }
+    else
+    {                                                                 // "GET [remote]\n", "PUT [remote]\n" or "DELETE [remote]\n"
+        client_request = calloc(1, strlen(cmd) + strlen(remote) + 3); // +1 for ' ', +1 for '\n' and +1 for '\0'
+        sprintf(client_request, "%s %s\n", cmd, remote);
+    }
+
+    size_t bytes_to_write = strlen(client_request);
+    int bytes_wrote = write_to_socket(server_fd, client_request, bytes_to_write);
+
+    if (bytes_wrote < bytes_to_write)
+    { // Connection got closed while we were writting our data; encapsulates the case when bytes_wrote == -1
+        print_connection_closed();
+        return -1;
+    }
+
+    if (client_request)
+        free(client_request);
+
+    // if PUT: write # of bytes the server should expecte to receive & binary data that follows
+    if (req == PUT)
+    {
+        int put_err = perform_put();
+        if (-1 == put_err)
+            return -1;
+    }
 }
 
+int perform_put()
+{
+    char *local = parsed_args[4]; // path to local file
+    struct stat stat_local;
+
+    int stat_err = stat(local, &stat_local);
+    if (-1 == stat_err)
+        return -1;
+
+    off_t local_size = stat_local.st_size;
+    // Step1: write # of bytes the server should expect to receive; sizeof(size_t) = 8
+    // Interpret the `off_t local_size` as a `char*`, so that the `write_to_socket` method can write byte by byte from this integer
+    // effectively saying, "Here's where you can start reading bytes to send over the socket."
+    write_to_socket(server_fd, (char *)&local_size, sizeof(size_t));
+
+    // Step2: Write binary data
+
+    FILE *local_file = fopen(local, "r");
+    if (!local_file) // On PUT, if local file does not exist, simply exiting is okay. -> will exit in `main`
+        return -1;
+
+    size_t bytes_wrote = 0;
+    while (bytes_wrote < local_size)
+    {
+        size_t new_bytes_wrote = get_min(local_size - bytes_wrote, (size_t)1024); // ensure we don't wirte more than `local_size` bytes, while keeping writing bytes 1024 by 1024
+        // should maintain some (reasonably) fixed size buffers (say, 1024 bytes), and reuse these buffers as you send or receive data over time.
+        char buffer[MAX_HEADER_LEN + 1];
+
+        // Read from `local_file` into `buffer`
+        fread(buffer, 1, new_bytes_wrote, local_file);
+        //Write from `buffer` to socket
+        int bytes_wrote_to_socket = write_to_socket(server_fd, buffer, new_bytes_wrote);
+        if (bytes_wrote_to_socket < new_bytes_wrote) // connection got closed in the meantime
+        {
+            print_connection_closed();
+            return -1;
+        }
+
+        bytes_wrote += new_bytes_wrote;
+    }
+
+    fclose(local_file);
+    // Once the client has sent all the data to the server, it should perform a ‘half close’ by closing the write half of the socket (hint: shutdown()).
+    int shutdown_err = shutdown(server_fd, SHUT_WR);
+    if (-1 == shutdown_err) {
+        perror("Failed to shutdown() Write part");
+        return -1;
+    }
+
+    return 0;
+}
+
+int read_server_response(verb req)
+{
+    // TODO;
+
+    return -1;
+}
 
 void cleanup_resources()
 {
     shutdown(server_fd, SHUT_RD); // we are done listening to the server socket
     close(server_fd);             // close server socket
-    free(parsed_args);                   // `parsed_args` were calloc'd in `parse_args`
-    parsed_args = NULL;                  // ensure use-after-free safety
+    free(parsed_args);            // `parsed_args` were calloc'd in `parse_args`
+    parsed_args = NULL;           // ensure use-after-free safety
 }
 
 /**

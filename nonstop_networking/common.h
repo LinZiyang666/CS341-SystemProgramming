@@ -6,6 +6,9 @@
 #include <stddef.h>
 #include <sys/types.h>
 
+#define MAX_HEADER_LEN 1024
+#define MAX_FILENAME 256
+
 #define LOG(...)                      \
     do {                              \
         fprintf(stderr, __VA_ARGS__); \
