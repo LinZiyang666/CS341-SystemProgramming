@@ -229,7 +229,7 @@ int read_server_response(verb req)
             read_from_socket(server_fd, (char*)&size, sizeof(size_t)); // read the size that we expect to receive, that we will have to read later on
             char buffer[size + 6]; 
             memset(buffer, 0, size + 6);
-            status_bytes_read = read_from_socket(server_fd, buffer, size);
+            status_bytes_read = read_from_socket(server_fd, buffer, size + 5);
             if (is_error(status_bytes_read, size)) {
                 free(response);
                 return -1;
@@ -264,8 +264,8 @@ int read_server_response(verb req)
             read_from_socket(server_fd, (char *)&size, sizeof(size_t));
             size_t bytes_read = 0;
             // \r\n\r\n -> 4 bytes
-            while (bytes_read < size) { // TODO: check -> https://stackoverflow.com/questions/6686261/what-at-the-bare-minimum-is-required-for-an-http-request
-                size_t new_bytes_read = get_min(size - bytes_read, MAX_HEADER_LEN); 
+            while (bytes_read < size + 5) { // TODO: check -> https://stackoverflow.com/questions/6686261/what-at-the-bare-minimum-is-required-for-an-http-request
+                size_t new_bytes_read = get_min(size + 5 - bytes_read, MAX_HEADER_LEN); 
                 char buffer[MAX_HEADER_LEN + 1] = {0}; // ChatGPT: , if you're simply initializing a freshly declared array, the direct initializer is more concise and idiomatic C.
                 size_t bytes_read_from_socket = read_from_socket(server_fd, buffer, new_bytes_read); // read from socket
 
