@@ -7,8 +7,6 @@
 #include <errno.h>
 #include <unistd.h>
 
-#define MAX_HEADER_LEN 1024
-#define MAX_FILENAME 256
 
 ssize_t read_from_socket(int socket, char *buffer, size_t count) {
     // Your Code Here
