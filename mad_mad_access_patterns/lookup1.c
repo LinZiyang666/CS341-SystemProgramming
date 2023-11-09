@@ -7,6 +7,23 @@
 #include <stdlib.h>
 #include <string.h>
 
+char* read_at_most(size_t len, FILE* input_file) {
+
+    char *str = calloc(1, len + 1);
+    size_t i = 0;
+    char ch;
+    while ((ch = fgetc(input_file)) != EOF && ch != '\0' && i < len) {
+      str[i ++] = ch;
+    }
+    if (ch != EOF && ch != '\0') // there were still bytes to read from curr_word => strlen(curr_word) > strlen(target_word) => read one more byte to make `strcmp` correct
+    {
+      str[i ++] = ch;
+    }
+
+    str[i] = '\0'; 
+    return str;
+}
+
 void search_word(char* target_word, FILE* input_file, uint32_t off) { // `off` is relative to the beginning of the file
 
     if (off == 0) // leaf, base case
@@ -22,10 +39,7 @@ void search_word(char* target_word, FILE* input_file, uint32_t off) { // `off` i
     BinaryTreeNode node;
     fread(&node, sizeof(BinaryTreeNode), 1, input_file);
     
-    char *curr_word = calloc(1, strlen(target_word) + 1); // TODO: Check correctness to "no limit on the length of a word in the file or the length of the words your program will look up."
-    
-    // fseek(input_file, off + sizeof(BinaryTreeNode), SEEK_SET); // position file pointer before `char word[]`, so that we can read the actual `curr_word` ; TODO: Check if needed, as: Each call to fread then advances the file pointer by the number of bytes read.
-    fread(curr_word, strlen(target_word), 1, input_file);
+    char *curr_word = read_at_most(strlen(target_word), input_file);
 
     if (strcmp(target_word, curr_word) == 0) // match :D
       {
