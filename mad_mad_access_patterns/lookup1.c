@@ -7,11 +7,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-void search_word(char* word, FILE* input_file, uint32_t off) { // `off` is relative to the beginning of the file
+void search_word(char* target_word, FILE* input_file, uint32_t off) { // `off` is relative to the beginning of the file
 
     if (off == 0) // leaf, base case
       {
-        printNotFound(word);
+        printNotFound(target_word);
         return;
       }
     
@@ -22,25 +22,25 @@ void search_word(char* word, FILE* input_file, uint32_t off) { // `off` is relat
     BinaryTreeNode node;
     fread(&node, sizeof(BinaryTreeNode), 1, input_file);
     
-    char *curr_word = calloc(1, strlen(word) + 1); // TODO: Check correctness to "no limit on the length of a word in the file or the length of the words your program will look up."
+    char *curr_word = calloc(1, strlen(target_word) + 1); // TODO: Check correctness to "no limit on the length of a word in the file or the length of the words your program will look up."
     
     // fseek(input_file, off + sizeof(BinaryTreeNode), SEEK_SET); // position file pointer before `char word[]`, so that we can read the actual `curr_word` ; TODO: Check if needed, as: Each call to fread then advances the file pointer by the number of bytes read.
-    fread(curr_word, strlen(word), 1, input_file);
+    fread(curr_word, strlen(target_word), 1, input_file);
 
-    if (strcmp(word, curr_word) == 0) // match :D
+    if (strcmp(target_word, curr_word) == 0) // match :D
       {
-        printFound(word, node.count, node.price);
+        printFound(target_word, node.count, node.price);
         free(curr_word);
         return;
       }
-    else if (strcmp(word, curr_word) < 0) { // BST: go search to left
+    else if (strcmp(target_word, curr_word) < 0) { // BST: go search to left
 
-      search_word(word, input_file, node.left_child);
+      search_word(target_word, input_file, node.left_child);
       free(curr_word);
       return;
     }
     else { // BST: go search to right
-      search_word(word, input_file, node.right_child);
+      search_word(target_word, input_file, node.right_child);
       free(curr_word);
       return;
     }
@@ -80,8 +80,6 @@ int main(int argc, char **argv)
 
 
   // if first 4 bytes are not “BTRE”, print a helpful error message and exit with error code 2.
-
-  puts(data_file);
   for (int i = 2; i < argc; ++i)
   {
     char *word = argv[i];
