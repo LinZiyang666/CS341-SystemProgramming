@@ -22,7 +22,7 @@ void search_word(char* word, FILE* input_file, uint32_t off) { // `off` is relat
     BinaryTreeNode node;
     fread(&node, sizeof(BinaryTreeNode), 1, input_file);
     
-    char *curr_word = calloc(1, strlen(word) + 1); // TODO: Later do reading until the end of file as in Networking MP
+    char *curr_word = calloc(1, strlen(word) + 1); // TODO: Check correctness to "no limit on the length of a word in the file or the length of the words your program will look up."
     
     // fseek(input_file, off + sizeof(BinaryTreeNode), SEEK_SET); // position file pointer before `char word[]`, so that we can read the actual `curr_word` ; TODO: Check if needed, as: Each call to fread then advances the file pointer by the number of bytes read.
     fread(curr_word, strlen(word), 1, input_file);
