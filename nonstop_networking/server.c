@@ -62,6 +62,8 @@ void exec_cmd(client_info_t *c_info_ptr, int client_fd);
 void handle_errors(client_info_t *c_info_ptr, int client_fd);
 void epoll_set_client_WR(int client_fd);
 
+void write_get_to_client(int client_fd, size_t size, FILE* read_file); //TODO;
+
 int read_put_from_client(client_info_t *c_info_ptr, int client_fd);
 
 // RET: 0 if successful, else error_code 1 if failed
@@ -76,7 +78,7 @@ int read_put_from_client(client_info_t *c_info_ptr, int client_fd)
         [size]some call it prison break others call it privilege escalation ...
     */
 
-    int filename_len = (strlen(g_temp_dir) + 1 + strlen(c_info_ptr->filename)) + 1; // `%s/%s`
+    int filename_len = (strlen(g_temp_dir) + 1 + strlen(c_info_ptr->filename)) + 1; // `%s/%s` w/ '\0' at the end
     char filepath[filename_len];
     memset(filepath, 0, filename_len);
 
@@ -463,6 +465,7 @@ void epoll_set_client_WR(int client_fd)
 
 void exec_cmd(client_info_t *c_info_ptr, int client_fd)
 {
+    LOG("exec cmd");
     // NOTE: on errors, early return and we will `clean_client` when handling errors (`handle_errors`)
     if (c_info_ptr->cmd == GET)
     {
@@ -488,4 +491,64 @@ void exec_cmd(client_info_t *c_info_ptr, int client_fd)
     }
 
     clean_client(client_fd);
+}
+
+int exec_get(client_info_t *c_info_ptr, int client_fd) { // read from `dir/filename` and write OK\n[size][file_content] to client socket
+    LOG("exec GET");
+    int filename_len = strlen(g_temp_dir) + 1 + strlen(c_info_ptr->filename) + 1; // `%s/%s`
+    char filepath[filename_len];
+    memset(filepath, 0, filename_len);
+    sprintf(filepath, "%s/%s", g_temp_dir, c_info_ptr->filename);
+
+    FILE* read_file = fopen(filepath, "r");
+    if (read_file == NULL) // nonexistent file or could not open
+     {
+        c_info_ptr->state = -3; // No such file error
+        return 1;
+     }
+
+     write_to_socket(client_fd, OK, strlen(OK)); // OK\n
+     size_t size = *(size_t*)dictionary_get(file_size, c_info_ptr->filename);
+     write_to_socket(client_fd, (char*) &size, sizeof(size_t)); //[size]
+
+     write_get_to_client(client_fd, size, read_file); 
+
+     fclose(read_file);
+
+    return 0;
+}
+
+
+void write_get_to_client(int client_fd, size_t size, FILE* read_file) {
+    size_t bytes_wrote = 0;
+    while (bytes_wrote < size) {
+        size_t new_bytes_wrote = get_min(size - bytes_wrote, MAX_HEADER_LEN);
+        char buffer[MAX_HEADER_LEN + 1] = {0};
+        fread(buffer,  1, new_bytes_wrote, read_file); // read from `read_file` to buffer
+        write_to_socket(client_fd, buffer, new_bytes_wrote); // write from buffer to client_fd
+        bytes_wrote += new_bytes_wrote;
+    }
+}
+
+// NOTE: LIST cannot fail
+int exec_list(client_info_t *c_info_ptr, int client_fd) { // read from `dir/filename` and write OK\n[size][files_from_dir] to client socket
+    LOG("exec LIST");
+    size_t size = 0;
+
+     write_to_socket(client_fd, OK, strlen(OK)); // OK\n
+     VECTOR_FOR_EACH(file_list, filename, {
+        size += strlen(filename) + 1;
+     });
+
+     if (size) size --; // Each filename has \n appended to it, if it is not the last file
+
+     write_to_socket(client_fd, (char*) &size, sizeof(size_t)); //[size]
+
+     VECTOR_FOR_EACH(file_list, filename, {
+        write_to_socket(client_fd, filename, strlen(filename));
+        if (_it != _iend - 1) // not the last file in the `file_list` vector =>  Notice there is no new line at the end of the list.
+            write_to_socket(client_fd, "\n", 1);
+     });
+
+    return 0;
 }
