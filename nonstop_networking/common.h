@@ -8,7 +8,13 @@
 
 #define MAX_HEADER_LEN 1024
 #define MAX_FILENAME 256
-#define MAX_ERROR_LEN 32 //TODO: ask
+#define MAX_ERROR_LEN 32 
+
+#define MAX_CLIENTS 10 
+#define MAX_EVENTS 100 
+
+// 5000ms = 5s
+#define MAX_TIMEOUT 5000
 
 static char *OK = "OK\n";
 static char *ERROR = "ERROR\n";
