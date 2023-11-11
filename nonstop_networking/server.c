@@ -546,6 +546,9 @@ void close_server() {
 
     if (g_epoll_fd != -1)
         close(g_epoll_fd);
+    
+    if (g_port)
+        free(g_port);
 
     vector_destroy(file_list);
 
