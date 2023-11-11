@@ -331,14 +331,20 @@ void handle_errors(client_info_t *c_info_ptr, int client_fd)
     // Print correct error prompt
     if (c_info_ptr->state == -1)
     {
+        fprintf(stderr, "Error: %s\n", err_bad_request);
+        write_to_socket(client_fd, ERROR, strlen(ERROR));
         write_to_socket(client_fd, err_bad_request, strlen(err_bad_request));
     }
     else if (c_info_ptr->state == -2)
     {
+        fprintf(stderr, "Error: %s\n", err_bad_file_size);
+        write_to_socket(client_fd, ERROR, strlen(ERROR));
         write_to_socket(client_fd, err_bad_file_size, strlen(err_bad_file_size));
     }
     else
     {
+        fprintf(stderr, "Error: %s\n", err_no_such_file);
+        write_to_socket(client_fd, ERROR, strlen(ERROR));
         write_to_socket(client_fd, err_no_such_file, strlen(err_no_such_file));
     }
     // cleanup resources allocd for client
@@ -388,6 +394,7 @@ void read_header(client_info_t *c_info_ptr, int client_fd)
     }
     else
     { // Nonexistent verb => Bad request
+        LOG("Nonexistent verb ?");
         print_invalid_response();
         c_info_ptr->state = -1;         // mark the error
         epoll_set_client_WR(client_fd); // to write the error to the client

@@ -281,7 +281,7 @@ int read_server_response(verb req)
         }
 
     }
-    else { //TODO: handle ERROR from server
+    else { // handle ERROR from server
         char *err_response = calloc(1, strlen(ERROR) + 1);
         strcpy(err_response, response);
         free(response); 
@@ -299,7 +299,6 @@ int read_server_response(verb req)
             print_error_message(error_msg);
         }
         else {
-            // fprintf(stderr, "%s\n", err_response);
             print_invalid_response();
         }
 
