@@ -31,8 +31,8 @@ struct client_info
         -2 = bad file size
         -3 = no such file
     */
-    int state; 
-    verb req;
+    int state;
+    verb cmd; // GET, LIST, PUT or GET
     char filename[MAX_FILENAME];
     char header[MAX_HEADER_LEN];
 };
@@ -50,9 +50,90 @@ void setup_epoll();
 
 void clean_client(int client_fd);
 void run_client(int client_fd);
-void read_header(client_info_t* c_info_ptr, int client_fd); // TODO
-void exec_cmd(client_info_t* c_info_ptr, int client_fd); // TODO
-void handle_errors(client_info_t* c_info_ptr, int client_fd);
+void read_header(client_info_t *c_info_ptr, int client_fd);
+
+// RET: 0 if successful, 1 if failed
+int exec_get(client_info_t *c_info_ptr, int client_fd);    // TODO
+int exec_put(client_info_t *c_info_ptr, int client_fd);    // TODO
+int exec_list(client_info_t *c_info_ptr, int client_fd);   // TODO
+int exec_delete(client_info_t *c_info_ptr, int client_fd); // TODO
+void exec_cmd(client_info_t *c_info_ptr, int client_fd);
+
+void handle_errors(client_info_t *c_info_ptr, int client_fd);
+void epoll_set_client_WR(int client_fd);
+
+int read_put_from_client(client_info_t *c_info_ptr, int client_fd);
+
+// RET: 0 if successful, else error_code 1 if failed
+// Called from `read_header`; TODO: think how to call it from `exec_cmd`
+// Reads the data after the PUT header that the client sent
+int read_put_from_client(client_info_t *c_info_ptr, int client_fd)
+{
+
+    /*
+    Format of client request to server (EXAMPLE):
+        PUT prison_break_s05_e01.mp4\n
+        [size]some call it prison break others call it privilege escalation ...
+    */
+
+    int filename_len = (strlen(g_temp_dir) + 1 + strlen(c_info_ptr->filename)) + 1; // `%s/%s`
+    char filepath[filename_len];
+    memset(filepath, 0, filename_len);
+
+    sprintf(filepath, "%s/%s", g_temp_dir, c_info_ptr->filename); // write the filepath in the correct format
+
+    // we will check if read_file == NULL, and if so: file could not be opened => it did not exist before, but was created by `write_file` => add it to the `files` list
+    FILE *read_file = fopen(filepath, "r");
+    FILE *write_file = fopen(filepath, "w"); // If a PUT request is called with an existing file. overwrite the file
+
+    if (write_file == NULL)
+    {
+        perror("fopen() with w mode failed");
+        return 1;
+    }
+
+    size_t size = 0;
+    read_from_socket(client_fd, (char *)&size, sizeof(size_t));
+    size_t bytes_read = 0;
+
+    while (bytes_read < size + 5)
+    {
+
+        size_t bytes_to_read = get_min(size + 5 - bytes_read, MAX_HEADER_LEN);
+        char buffer[MAX_HEADER_LEN + 1] = {0};
+
+        size_t bytes_read_from_socket = read_from_socket(client_fd, buffer, bytes_to_read);
+        if (bytes_read_from_socket == -1)
+            continue;
+        if (bytes_read_from_socket == 0)
+            break;
+
+        // Write the bytes read from the socket to the local file (on the server)
+        fwrite(buffer, 1, bytes_read_from_socket, write_file); // TODO: check order of `size` and `nmemb` params
+        bytes_read += bytes_read_from_socket;
+    }
+
+    // If a request fails
+    if (is_error(bytes_read, size))
+    {
+        // delete the file
+        remove(filepath);
+        return 1;
+    }
+
+    fclose(write_file);
+    if (read_file == NULL)
+    { // file could not be opened => it did not exist before, but was created by `write_file` => add it to the `files` list
+        vector_push_back(file_list, c_info_ptr->filename);
+    }
+    else
+        fclose(read_file);
+
+    // Modify the file size of the file that we've just written
+
+    dictionary_set(file_size, c_info_ptr->filename, &size); //NOTE: store address of size_t => (size_t*), make sure to deref. it correctly
+    return 0;
+}
 
 // Global variables: naming convention: https://users.ece.cmu.edu/~eno/coding/CCodingStandard.html#gconstants
 static char *g_temp_dir;
@@ -249,65 +330,162 @@ void setup_epoll()
                     exit(1);
                 }
 
-                client_info_t* c_info_ptr = calloc(1, sizeof(client_info_t));
-                c_info_ptr->state = 0; // update state in DFA
+                client_info_t *c_info_ptr = calloc(1, sizeof(client_info_t));
+                c_info_ptr->state = 0;                               // update state in DFA
                 dictionary_set(client_dict, &client_fd, c_info_ptr); // map from socket handle to connection state
             }
-            else 
+            else
             {
-                run_client(curr_event_fd); 
+                run_client(curr_event_fd);
             }
         }
     }
 }
 
-
-/* 
+/*
 This method is invoked to either:
 - Parse header info
 - Execute command (LIST, GET, PUT or DELETE)
 - Error handling on server-side: "Bad request", "Bad file size" or "No such file"
 */
 
-void run_client(int client_fd) { 
+void run_client(int client_fd)
+{
 
-    client_info_t* c_info_ptr = dictionary_get(client_dict, &client_dict);
+    client_info_t *c_info_ptr = dictionary_get(client_dict, &client_dict);
 
-    if (c_info_ptr->state == 0) { // Header not parsed completely yet
+    if (c_info_ptr->state == 0)
+    { // Header not parsed completely yet
         read_header(c_info_ptr, client_fd);
     }
-    else if (c_info_ptr->state == 1) {
+    else if (c_info_ptr->state == 1)
+    {
         exec_cmd(c_info_ptr, client_fd);
     }
-    else { // Error
+    else
+    { // Error
         handle_errors(c_info_ptr, client_fd);
     }
 }
 
-void clean_client(int client_fd) {
+void clean_client(int client_fd)
+{
     // Cleanup `client_fd` from `client_dict`
-    client_info_t* c_info_ptr = dictionary_get(client_dict, &client_fd);
+    client_info_t *c_info_ptr = dictionary_get(client_dict, &client_fd);
     free(c_info_ptr);
     dictionary_remove(client_dict, &client_fd);
 
     // Deregister client_fd from interest list
-    epoll_ctl(g_epoll_fd, EPOLL_CTL_DEL, client_fd, NULL); 
+    epoll_ctl(g_epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
     // Shutdown & close fd
     shutdown(client_fd, SHUT_RDWR);
     close(client_fd);
 }
 
-void handle_errors(client_info_t* c_info_ptr, int client_fd) {
+void handle_errors(client_info_t *c_info_ptr, int client_fd)
+{
     // Print correct error prompt
-    if (c_info_ptr ->state == -1) {
+    if (c_info_ptr->state == -1)
+    {
         write_to_socket(client_fd, err_bad_request, strlen(err_bad_request));
     }
-    else if (c_info_ptr->state == -2) {
+    else if (c_info_ptr->state == -2)
+    {
         write_to_socket(client_fd, err_bad_file_size, strlen(err_bad_file_size));
     }
-    else {
+    else
+    {
         write_to_socket(client_fd, err_no_such_file, strlen(err_no_such_file));
     }
-    //cleanup resources allocd for client
+    // cleanup resources allocd for client
+    clean_client(client_fd);
+}
+
+void read_header(client_info_t *c_info_ptr, int client_fd)
+{
+    size_t bytes_read = read_header_from_socket(client_fd, c_info_ptr->header, MAX_HEADER_LEN);
+    if (bytes_read == 1024) // The maximum header length (header is part before data) for both the request and response is 1024 bytes => Bad request (malformed)
+    {
+        c_info_ptr->state = -1;         // mark the error
+        epoll_set_client_WR(client_fd); // to write the error to the client
+        return;
+    }
+
+    if (!strncmp(c_info_ptr->header, "GET", 3))
+    {
+        c_info_ptr->cmd = GET;
+        strcpy(c_info_ptr->filename, c_info_ptr->header + strlen("GET\n"));
+        c_info_ptr->header[strlen(c_info_ptr->header) - 1] = '\0';
+    }
+    else if (!strncmp(c_info_ptr->header, "PUT", 6))
+    {
+        c_info_ptr->cmd = PUT;
+        strcpy(c_info_ptr->filename, c_info_ptr->header + strlen("PUT\n"));
+        c_info_ptr->header[strlen(c_info_ptr->header) - 1] = '\0';
+
+        int err_put = read_put_from_client(c_info_ptr, client_fd);
+        if (err_put)
+        {                                   // Bad file size
+            c_info_ptr->state = -2;         // mark state
+            epoll_set_client_WR(client_fd); // to write the error to the client
+            return;
+        }
+    }
+    else if (!strncmp(c_info_ptr->header, "DELETE", 6))
+    {
+        c_info_ptr->cmd = DELETE;
+        strcpy(c_info_ptr->filename, c_info_ptr->header + strlen("DELETE\n"));
+        c_info_ptr->header[strlen(c_info_ptr->header) - 1] = '\0';
+    }
+    else if (!strncmp(c_info_ptr->header, "LIST", 4))
+    {
+        // Notice there is no new line at the end of the list.
+        c_info_ptr->cmd = LIST;
+    }
+    else
+    { // Nonexistent verb => Bad request
+        print_invalid_response();
+        c_info_ptr->state = -1;         // mark the error
+        epoll_set_client_WR(client_fd); // to write the error to the client
+        return;
+    }
+
+    // Now we have succesfully parsed the header => set state = 1
+    c_info_ptr->state = 1;
+    epoll_set_client_WR(client_fd); // for later to write server's response to the client
+}
+
+void epoll_set_client_WR(int client_fd)
+{ // Changed client's event from READ to WRITE => from EPOLLIN to EPOLLOUT
+    struct epoll_event changed_ev = {.data.fd = client_fd, .events = EPOLLOUT};
+    epoll_ctl(g_epoll_fd, EPOLL_CTL_MOD, client_fd, &changed_ev);
+}
+
+void exec_cmd(client_info_t *c_info_ptr, int client_fd)
+{
+    // NOTE: on errors, early return and we will `clean_client` when handling errors (`handle_errors`)
+    if (c_info_ptr->cmd == GET)
+    {
+        int err_get = exec_get(c_info_ptr, client_fd);
+        if (err_get)
+            return;
+    }
+    else if (c_info_ptr->cmd == PUT)
+    {
+        write_all_to_socket(client_fd, OK, strlen(OK)); // have already parsed PUT answer from client, as we needed to check if "Bad file size" in `read_header`
+    }
+    if (c_info_ptr->cmd == LIST)
+    {
+        int err_list = exec_list(c_info_ptr, client_fd);
+        if (err_list)
+            return;
+    }
+    if (c_info_ptr->cmd == DELETE)
+    {
+        int err_delete = exec_delete(c_info_ptr, client_fd);
+        if (err_delete)
+            return;
+    }
+
     clean_client(client_fd);
 }

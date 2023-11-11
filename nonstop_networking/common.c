@@ -53,6 +53,32 @@ ssize_t write_to_socket(int socket, const char *buffer, size_t count)  {
     return bytes_wrote;
 }
 
+ssize_t read_header_from_socket(int socket, char *buffer, size_t count) {
+
+    int bytes_read = 0;
+    while (bytes_read < count) {
+
+        size_t newly_read_bytes = read(socket, buffer + bytes_read, 1); // read one byte at a time, until `\n`
+
+        if (newly_read_bytes == 0 || buffer[strlen(buffer) - 1] == '\n') // socket disconnected OR we finished reading the header
+            break;
+        else if (newly_read_bytes == -1) {
+           // check error code
+            if (errno == EINTR) // interrupted
+                continue;       // retry
+            else
+                {
+                    perror("read_header_from_socket failed");
+                    return -1;
+                }
+        }
+
+        bytes_read += newly_read_bytes;
+    }
+
+    return bytes_read;
+}
+
 
 int is_error(size_t read_bytes, size_t buffer_size) {
     if (read_bytes == 0 && read_bytes != buffer_size) // connection got closed
@@ -70,4 +96,12 @@ int is_error(size_t read_bytes, size_t buffer_size) {
      }
      
      return 0; // No error :D
+}
+
+size_t get_min(size_t x, size_t y)
+{
+    if (x <= y)
+        return x;
+    else
+        return y;
 }

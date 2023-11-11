@@ -39,6 +39,14 @@ ssize_t read_from_socket(int socket, char *buffer, size_t count);
 // RET: `wrote_bytes`: the number of bytes succesfully wrote into the buffer, or -1 in case of an error
 ssize_t write_to_socket(int socket, const char *buffer, size_t count);
 
+// Read `count` ytes from `socket` into `buffer`
+// This method is invoked for reading the header of a request received from the client, on the server side
+// HEADER_MAX_LENGTH = 1024; reads byte by byte as we don't now how long the header will be
+ssize_t read_header_from_socket(int socket, char *buffer, size_t count);
+
 // RET: 1, if an error is detected (and calls `print_connection_closed`, `print_too_little_data`, or `print_received_too_much_data`), depending on the error
 // or 0, if no error was found
 int is_error(size_t sz1, size_t sz2);
+
+// std::min
+size_t get_min(size_t x, size_t y);
