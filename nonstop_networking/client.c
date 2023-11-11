@@ -264,6 +264,8 @@ int read_server_response(verb req)
             read_from_socket(server_fd, (char *)&size, sizeof(size_t));
             size_t bytes_read = 0;
             // \r\n\r\n -> 4 bytes
+            // HTTP Web requests:  \r\n forms the standard line terminator in HTTP protocol
+
             while (bytes_read < size + 5) { // TODO: check -> https://stackoverflow.com/questions/6686261/what-at-the-bare-minimum-is-required-for-an-http-request
                 size_t new_bytes_read = get_min(size + 5 - bytes_read, MAX_HEADER_LEN); 
                 char buffer[MAX_HEADER_LEN + 1] = {0}; // ChatGPT: , if you're simply initializing a freshly declared array, the direct initializer is more concise and idiomatic C.
