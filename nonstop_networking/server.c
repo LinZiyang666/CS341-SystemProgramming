@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
+#include <sys/epoll.h>
 
 #include "includes/dictionary.h"
 #include "includes/vector.h"
@@ -19,13 +20,24 @@ dictionary *client_dict; // int -> shallow; client_fd -> client_info*
 vector *file_list;       // maintain file list (server side)
 dictionary *file_size;   // maintain a mapping of file (string) -> file_size (size_t = unsigned long)
 
-typedef struct client_info
+struct client_info
 {
-    int state;
+    /*
+    States in the DFA
+    0 -> Header not parsed yet
+    1 -> Header parsed
+    <0 -> error codes:
+        -1 = bad request
+        -2 = bad file size
+        -3 = no such file
+    */
+    int state; 
     verb req;
     char filename[MAX_FILENAME];
     char header[MAX_HEADER_LEN];
 };
+
+typedef struct client_info client_info_t;
 
 // Functions declarations
 void close_server(); // TODO
@@ -34,13 +46,19 @@ void setup_handlers();
 void setup_dir();
 void setup_global_variables();
 void setup_server_conn();
+void setup_epoll();
 
-void clean_client(int client_fd); // TODO: after executing a command
+void clean_client(int client_fd);
+void run_client(int client_fd);
+void read_header(client_info_t* c_info_ptr, int client_fd); // TODO
+void exec_cmd(client_info_t* c_info_ptr, int client_fd); // TODO
+void handle_errors(client_info_t* c_info_ptr, int client_fd);
 
 // Global variables: naming convention: https://users.ece.cmu.edu/~eno/coding/CCodingStandard.html#gconstants
 static char *g_temp_dir;
 static char *g_port = NULL;
 static int g_sock_fd; // socket exposed by the SERVER
+static int g_epoll_fd;
 
 int main(int argc, char **argv)
 {
@@ -62,7 +80,12 @@ int main(int argc, char **argv)
     // Setup server conection
     setup_server_conn();
     // Setup `epoll`
+    setup_epoll();
+
     // Close server
+    close_server();
+
+    return 0;
 }
 
 void sigint_handler(int signum)
@@ -154,15 +177,137 @@ void setup_server_conn()
         exit(EXIT_FAILURE);
     }
 
-    if (bind(g_sock_fd, res->ai_addr, res->ai_addrlen) == -1) {
+    if (bind(g_sock_fd, res->ai_addr, res->ai_addrlen) == -1)
+    {
         perror("bind failed");
         exit(EXIT_FAILURE);
     }
 
-    if (listen(g_sock_fd, MAX_CLIENTS) == -1) {
+    if (listen(g_sock_fd, MAX_CLIENTS) == -1)
+    {
         perror("listen failed");
         exit(EXIT_FAILURE);
     }
-    
+
     freeaddrinfo(res);
+}
+
+void setup_epoll()
+{ // For reference, see demo from class: https://github.com/angrave/CS341-Lectures-FA22/blob/main/code/lec33/epoll1.c
+    LOG("Starting epoll");
+    g_epoll_fd = epoll_create(16);
+
+    if (g_epoll_fd == -1)
+    {
+        perror("epoll_create failed");
+        exit(1);
+    }
+
+    struct epoll_event ev = {.data.fd = g_sock_fd, .events = EPOLLIN}; // read
+
+    if (epoll_ctl(g_epoll_fd, EPOLL_CTL_ADD, g_sock_fd, &ev) == -1)
+    {
+        perror("Tracking server event (in the interest list) with epoll failed");
+        exit(1);
+    }
+
+    struct epoll_event epoll_events[MAX_EVENTS]; // Array of events that may be added to the interest list of g_epoll_fd later
+
+    while (true)
+    {
+        // TODO: check timeout param
+        int num_events = epoll_wait(g_epoll_fd, epoll_events, MAX_EVENTS, MAX_TIMEOUT); // How many events are currently active in the interest list  (i.e: ready for the requested I/O)
+
+        if (num_events == 0)
+            continue; // no currently active event
+        if (num_events == -1)
+        {
+            perror("epoll_wait failed");
+            exit(1);
+        }
+
+        /* Iterate over sockets only w/ active events */
+        for (int i = 0; i < num_events; ++i)
+        {
+
+            int curr_event_fd = epoll_events[i].data.fd;
+            if (curr_event_fd == g_sock_fd)
+            { // New connection request received by the SERVER
+
+                int client_fd = accept(g_sock_fd, NULL, NULL);
+                if (client_fd == -1)
+                {
+                    perror("accept failed");
+                    exit(1);
+                }
+
+                // Add a new event associated w/ the new connected cleintto the "interest list"
+                struct epoll_event new_ev = {.data.fd = client_fd, .events = EPOLLIN};
+                if (epoll_ctl(g_epoll_fd, EPOLL_CTL_ADD, client_fd, &new_ev) == -1)
+                {
+                    perror("Adding the new client's connection event to interest list (epoll_ctl(EPOLL_CTL_ADD)) failed");
+                    exit(1);
+                }
+
+                client_info_t* c_info_ptr = calloc(1, sizeof(client_info_t));
+                c_info_ptr->state = 0; // update state in DFA
+                dictionary_set(client_dict, &client_fd, c_info_ptr); // map from socket handle to connection state
+            }
+            else 
+            {
+                run_client(curr_event_fd); 
+            }
+        }
+    }
+}
+
+
+/* 
+This method is invoked to either:
+- Parse header info
+- Execute command (LIST, GET, PUT or DELETE)
+- Error handling on server-side: "Bad request", "Bad file size" or "No such file"
+*/
+
+void run_client(int client_fd) { 
+
+    client_info_t* c_info_ptr = dictionary_get(client_dict, &client_dict);
+
+    if (c_info_ptr->state == 0) { // Header not parsed completely yet
+        read_header(c_info_ptr, client_fd);
+    }
+    else if (c_info_ptr->state == 1) {
+        exec_cmd(c_info_ptr, client_fd);
+    }
+    else { // Error
+        handle_errors(c_info_ptr, client_fd);
+    }
+}
+
+void clean_client(int client_fd) {
+    // Cleanup `client_fd` from `client_dict`
+    client_info_t* c_info_ptr = dictionary_get(client_dict, &client_fd);
+    free(c_info_ptr);
+    dictionary_remove(client_dict, &client_fd);
+
+    // Deregister client_fd from interest list
+    epoll_ctl(g_epoll_fd, EPOLL_CTL_DEL, client_fd, NULL); 
+    // Shutdown & close fd
+    shutdown(client_fd, SHUT_RDWR);
+    close(client_fd);
+}
+
+void handle_errors(client_info_t* c_info_ptr, int client_fd) {
+    // Print correct error prompt
+    if (c_info_ptr ->state == -1) {
+        write_to_socket(client_fd, err_bad_request, strlen(err_bad_request));
+    }
+    else if (c_info_ptr->state == -2) {
+        write_to_socket(client_fd, err_bad_file_size, strlen(err_bad_file_size));
+    }
+    else {
+        write_to_socket(client_fd, err_no_such_file, strlen(err_no_such_file));
+    }
+    //cleanup resources allocd for client
+    clean_client(client_fd);
 }
