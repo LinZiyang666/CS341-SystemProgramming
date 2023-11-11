@@ -6,6 +6,7 @@
 #include "format.h"
 #include <errno.h>
 #include <unistd.h>
+#include <string.h>
 
 
 ssize_t read_from_socket(int socket, char *buffer, size_t count) {
@@ -55,10 +56,10 @@ ssize_t write_to_socket(int socket, const char *buffer, size_t count)  {
 
 ssize_t read_header_from_socket(int socket, char *buffer, size_t count) {
 
-    int bytes_read = 0;
+    size_t bytes_read = 0;
     while (bytes_read < count) {
 
-        size_t newly_read_bytes = read(socket, buffer + bytes_read, 1); // read one byte at a time, until `\n`
+        ssize_t newly_read_bytes = read(socket, buffer + bytes_read, 1); // read one byte at a time, until `\n`
 
         if (newly_read_bytes == 0 || buffer[strlen(buffer) - 1] == '\n') // socket disconnected OR we finished reading the header
             break;

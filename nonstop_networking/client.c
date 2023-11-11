@@ -39,13 +39,6 @@ int run_client_request(verb req);
 // Reads from local indicated file, and write data to a buffer 1024 by 1024 bytes (or rem_bytes if rem_bytes < 1024); and then writes to the socket of the server
 int perform_put();
 
-size_t get_min(size_t x, size_t y)
-{
-    if (x <= y)
-        return x;
-    else
-        return y;
-}
 
 int read_server_response(verb req);
 void cleanup_resources();
