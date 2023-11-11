@@ -8,17 +8,20 @@
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <netdb.h>
 #include <sys/epoll.h>
+#include <dirent.h>
+#include <assert.h>
 
 #include "includes/dictionary.h"
 #include "includes/vector.h"
 #include "common.h"
 #include "format.h"
 
-dictionary *client_dict; // int -> shallow; client_fd -> client_info*
-vector *file_list;       // maintain file list (server side)
-dictionary *file_size;   // maintain a mapping of file (string) -> file_size (size_t = unsigned long)
+static dictionary *client_dict; // int -> shallow; client_fd -> client_info*
+static vector *file_list;       // maintain file list (server side)
+static dictionary *file_size;   // maintain a mapping of file (string) -> file_size (size_t = unsigned long)
 
 struct client_info
 {
@@ -40,7 +43,10 @@ struct client_info
 typedef struct client_info client_info_t;
 
 // Functions declarations
-void close_server(); // TODO
+int rm_unempty_dir(char* path);
+int is_directory(char* path);
+
+void close_server();
 void sigint_handler(int signum);
 void setup_handlers();
 void setup_dir();
@@ -53,95 +59,25 @@ void run_client(int client_fd);
 void read_header(client_info_t *c_info_ptr, int client_fd);
 
 // RET: 0 if successful, 1 if failed
-int exec_get(client_info_t *c_info_ptr, int client_fd);    // TODO
-int exec_put(client_info_t *c_info_ptr, int client_fd);    // TODO
-int exec_list(client_info_t *c_info_ptr, int client_fd);   // TODO
-int exec_delete(client_info_t *c_info_ptr, int client_fd); // TODO
+int exec_get(client_info_t *c_info_ptr, int client_fd);    
+int exec_put(client_info_t *c_info_ptr, int client_fd);    
+int exec_list(int client_fd);   
+int exec_delete(client_info_t *c_info_ptr, int client_fd); 
 void exec_cmd(client_info_t *c_info_ptr, int client_fd);
 
 void handle_errors(client_info_t *c_info_ptr, int client_fd);
 void epoll_set_client_WR(int client_fd);
 
-void write_get_to_client(int client_fd, size_t size, FILE* read_file); //TODO;
+void write_get_to_client(int client_fd, size_t size, FILE* read_file);
 
 int read_put_from_client(client_info_t *c_info_ptr, int client_fd);
 
-// RET: 0 if successful, else error_code 1 if failed
-// Called from `read_header`; TODO: think how to call it from `exec_cmd`
-// Reads the data after the PUT header that the client sent
-int read_put_from_client(client_info_t *c_info_ptr, int client_fd)
-{
-
-    /*
-    Format of client request to server (EXAMPLE):
-        PUT prison_break_s05_e01.mp4\n
-        [size]some call it prison break others call it privilege escalation ...
-    */
-
-    int filename_len = (strlen(g_temp_dir) + 1 + strlen(c_info_ptr->filename)) + 1; // `%s/%s` w/ '\0' at the end
-    char filepath[filename_len];
-    memset(filepath, 0, filename_len);
-
-    sprintf(filepath, "%s/%s", g_temp_dir, c_info_ptr->filename); // write the filepath in the correct format
-
-    // we will check if read_file == NULL, and if so: file could not be opened => it did not exist before, but was created by `write_file` => add it to the `files` list
-    FILE *read_file = fopen(filepath, "r");
-    FILE *write_file = fopen(filepath, "w"); // If a PUT request is called with an existing file. overwrite the file
-
-    if (write_file == NULL)
-    {
-        perror("fopen() with w mode failed");
-        return 1;
-    }
-
-    size_t size = 0;
-    read_from_socket(client_fd, (char *)&size, sizeof(size_t));
-    size_t bytes_read = 0;
-
-    while (bytes_read < size + 5)
-    {
-
-        size_t bytes_to_read = get_min(size + 5 - bytes_read, MAX_HEADER_LEN);
-        char buffer[MAX_HEADER_LEN + 1] = {0};
-
-        size_t bytes_read_from_socket = read_from_socket(client_fd, buffer, bytes_to_read);
-        if (bytes_read_from_socket == -1)
-            continue;
-        if (bytes_read_from_socket == 0)
-            break;
-
-        // Write the bytes read from the socket to the local file (on the server)
-        fwrite(buffer, 1, bytes_read_from_socket, write_file); // TODO: check order of `size` and `nmemb` params
-        bytes_read += bytes_read_from_socket;
-    }
-
-    // If a request fails
-    if (is_error(bytes_read, size))
-    {
-        // delete the file
-        remove(filepath);
-        return 1;
-    }
-
-    fclose(write_file);
-    if (read_file == NULL)
-    { // file could not be opened => it did not exist before, but was created by `write_file` => add it to the `files` list
-        vector_push_back(file_list, c_info_ptr->filename);
-    }
-    else
-        fclose(read_file);
-
-    // Modify the file size of the file that we've just written
-
-    dictionary_set(file_size, c_info_ptr->filename, &size); //NOTE: store address of size_t => (size_t*), make sure to deref. it correctly
-    return 0;
-}
 
 // Global variables: naming convention: https://users.ece.cmu.edu/~eno/coding/CCodingStandard.html#gconstants
 static char *g_temp_dir;
 static char *g_port = NULL;
 static int g_sock_fd; // socket exposed by the SERVER
-static int g_epoll_fd;
+static int g_epoll_fd = -1;
 
 int main(int argc, char **argv)
 {
@@ -159,7 +95,7 @@ int main(int argc, char **argv)
     setup_dir();
     // Setup global variables
     char *port = argv[1];
-    setup_global_varibles(port);
+    setup_global_variables(port);
     // Setup server conection
     setup_server_conn();
     // Setup `epoll`
@@ -230,6 +166,7 @@ void setup_server_conn()
     if (g_sock_fd == -1)
     {
         perror("Socket failed");
+        close_server();
         exit(1);
     }
 
@@ -243,7 +180,8 @@ void setup_server_conn()
     int gai = getaddrinfo(NULL, g_port, &hints, &res); // loopback interface addr;
     if (gai)
     {
-        LOG(gai_strerror(gai));
+        fprintf(stderr, "%s\n", gai_strerror(gai));
+        close_server();
         exit(1);
     }
 
@@ -251,24 +189,28 @@ void setup_server_conn()
     if (setsockopt(g_sock_fd, SOL_SOCKET, SO_REUSEADDR, &reuse_addr, sizeof(reuse_addr)) < 0)
     {
         perror("SO_REUSEADDR setsockopt failed");
+        close_server();
         exit(EXIT_FAILURE);
     }
     int reuse_port = 1;
     if (setsockopt(g_sock_fd, SOL_SOCKET, SO_REUSEPORT, &reuse_port, sizeof(reuse_port)) < 0)
     {
         perror("SO_REUSEPORT setsockopt failed");
+        close_server();
         exit(EXIT_FAILURE);
     }
 
     if (bind(g_sock_fd, res->ai_addr, res->ai_addrlen) == -1)
     {
         perror("bind failed");
+        close_server();
         exit(EXIT_FAILURE);
     }
 
     if (listen(g_sock_fd, MAX_CLIENTS) == -1)
     {
         perror("listen failed");
+        close_server();
         exit(EXIT_FAILURE);
     }
 
@@ -353,8 +295,8 @@ This method is invoked to either:
 
 void run_client(int client_fd)
 {
-
-    client_info_t *c_info_ptr = dictionary_get(client_dict, &client_dict);
+    LOG("Running client");
+    client_info_t *c_info_ptr = dictionary_get(client_dict, &client_fd);
 
     if (c_info_ptr->state == 0)
     { // Header not parsed completely yet
@@ -419,7 +361,7 @@ void read_header(client_info_t *c_info_ptr, int client_fd)
         strcpy(c_info_ptr->filename, c_info_ptr->header + strlen("GET\n"));
         c_info_ptr->header[strlen(c_info_ptr->header) - 1] = '\0';
     }
-    else if (!strncmp(c_info_ptr->header, "PUT", 6))
+    else if (!strncmp(c_info_ptr->header, "PUT", 3))
     {
         c_info_ptr->cmd = PUT;
         strcpy(c_info_ptr->filename, c_info_ptr->header + strlen("PUT\n"));
@@ -475,11 +417,12 @@ void exec_cmd(client_info_t *c_info_ptr, int client_fd)
     }
     else if (c_info_ptr->cmd == PUT)
     {
-        write_all_to_socket(client_fd, OK, strlen(OK)); // have already parsed PUT answer from client, as we needed to check if "Bad file size" in `read_header`
+        LOG("exec PUT");
+        write_to_socket(client_fd, OK, strlen(OK)); // have already parsed PUT answer from client, as we needed to check if "Bad file size" in `read_header`
     }
     if (c_info_ptr->cmd == LIST)
     {
-        int err_list = exec_list(c_info_ptr, client_fd);
+        int err_list = exec_list(client_fd);
         if (err_list)
             return;
     }
@@ -531,7 +474,7 @@ void write_get_to_client(int client_fd, size_t size, FILE* read_file) {
 }
 
 // NOTE: LIST cannot fail
-int exec_list(client_info_t *c_info_ptr, int client_fd) { // read from `dir/filename` and write OK\n[size][files_from_dir] to client socket
+int exec_list(int client_fd) { // read from `dir/filename` and write OK\n[size][files_from_dir] to client socket
     LOG("exec LIST");
     size_t size = 0;
 
@@ -551,4 +494,176 @@ int exec_list(client_info_t *c_info_ptr, int client_fd) { // read from `dir/file
      });
 
     return 0;
+}
+
+int exec_delete(client_info_t *c_info_ptr, int client_fd) { // read `dir/filename`, print OK\n if exists or mark status = 3 to client_fd (No such file in c_info_ptr) , and remove the file;
+// Check if `dir/filename` exists by iterating through `file_list`; if found (i < vector_size(file_list)): erase from vector & remove from file_size dict
+    LOG("exec DELETE");
+    int filename_len = strlen(g_temp_dir) + 1 + strlen(c_info_ptr->filename) + 1; // `%s/%s`
+    char filepath[filename_len];
+    memset(filepath, 0, filename_len);
+    sprintf(filepath, "%s/%s", g_temp_dir, c_info_ptr->filename);
+
+    if (remove(filepath) == -1) {
+        c_info_ptr->state = -3; // No such file
+        return 1; // Return error
+    }
+
+    size_t id = 0;
+    VECTOR_FOR_EACH(file_list, filename, { // Search for filename == c_info_ptr->filename
+        if (strcmp(filename, c_info_ptr->filename) != 0)
+            id ++;
+        else break;
+    });
+
+    if (id == vector_size(file_list)) // File was not found
+    {
+        c_info_ptr->state = -3; // No such file
+        return 1; // Return error
+    }
+
+    write_to_socket(client_fd, OK, strlen(OK)); // OK\n -> if file was found
+
+    // Remove the file from our Data Structures
+    vector_erase(file_list, id);
+    dictionary_remove(file_size, c_info_ptr->filename);
+
+    return 0;
+}
+
+
+// Invoked:
+// a.) When server is being closed
+// b.) When process receives SIGINT
+void close_server() {  
+
+    if (g_epoll_fd != -1)
+        close(g_epoll_fd);
+
+    vector_destroy(file_list);
+
+    vector* c_infos = dictionary_values(client_dict);
+
+    VECTOR_FOR_EACH(c_infos, c_info, {
+        free(c_info);
+    });
+
+    vector_destroy(c_infos);
+    dictionary_destroy(client_dict);
+
+    if (rmdir(g_temp_dir) == -1) { // dir may not be empty
+        rm_unempty_dir(g_temp_dir); // clean up any files stored in this directory, and then delete the directory itself.
+    }
+
+    dictionary_destroy(file_size);
+    exit(1);
+}
+
+// Simplified version of: https://stackoverflow.com/questions/2256945/removing-a-non-empty-directory-programmatically-in-c-or-c
+int rm_unempty_dir(char *dir_path) {
+
+    //TODO: allocate `buff` on the HEAP, as the recursion may be deep and the stack may not be enough
+    //TODO: error checking for `unlink`
+
+    DIR* dp = opendir(dir_path);
+    struct dirent* de = NULL;
+    char buff[2 * MAX_FILENAME + 1] = {0}; //see `dirent` man pages => strlen(de->dname) <= MAX_FILENMAE, `dir_path` <= MAX_FILENAME
+
+    while ((de = readdir(dp))) {
+        sprintf(buff, "%s/%s", dir_path, de->d_name);
+        if (!strcmp(de->d_name, ".") || !strcmp(de->d_name, "..")) /* Skip the names "." and ".." as we don't want to recurse on them. */
+            continue;
+        
+        if (is_directory(buff)) { // recurse
+            rm_unempty_dir(buff);
+        }
+        else  { // is file => unlink
+            unlink(buff);
+        }
+    }
+
+    closedir(dp);
+    rmdir(dir_path);
+
+    return 0;
+}
+
+// RET: 0 if successful, else error_code 1 if failed
+// Called from `read_header`; TODO: think how to call it from `exec_cmd`
+// Reads the data after the PUT header that the client sent
+int read_put_from_client(client_info_t *c_info_ptr, int client_fd)
+{
+
+    /*
+    Format of client request to server (EXAMPLE):
+        PUT prison_break_s05_e01.mp4\n
+        [size]some call it prison break others call it privilege escalation ...
+    */
+
+    int filename_len = (strlen(g_temp_dir) + 1 + strlen(c_info_ptr->filename)) + 1; // `%s/%s` w/ '\0' at the end
+    char filepath[filename_len];
+    memset(filepath, 0, filename_len);
+
+    sprintf(filepath, "%s/%s", g_temp_dir, c_info_ptr->filename); // write the filepath in the correct format
+
+    // we will check if read_file == NULL, and if so: file could not be opened => it did not exist before, but was created by `write_file` => add it to the `files` list
+    FILE *read_file = fopen(filepath, "r");
+    FILE *write_file = fopen(filepath, "w"); // If a PUT request is called with an existing file. overwrite the file
+
+    if (write_file == NULL)
+    {
+        perror("fopen() with w mode failed");
+        return 1;
+    }
+
+    size_t size = 0;
+    read_from_socket(client_fd, (char *)&size, sizeof(size_t));
+    size_t bytes_read = 0;
+
+    while (bytes_read < size + 5)
+    {
+
+        size_t bytes_to_read = get_min(size + 5 - bytes_read, MAX_HEADER_LEN);
+        char buffer[MAX_HEADER_LEN + 1] = {0};
+
+        ssize_t bytes_read_from_socket = read_from_socket(client_fd, buffer, bytes_to_read);
+        if (bytes_read_from_socket == -1)
+            continue;
+        if (bytes_read_from_socket == 0)
+            break;
+
+        // Write the bytes read from the socket to the local file (on the server)
+        fwrite(buffer, 1, bytes_read_from_socket, write_file); // TODO: check order of `size` and `nmemb` params
+        bytes_read += bytes_read_from_socket;
+    }
+
+    // If a request fails
+    if (is_error(bytes_read, size))
+    {
+        // delete the file
+        remove(filepath);
+        return 1;
+    }
+
+    fclose(write_file);
+    if (read_file == NULL)
+    { // file could not be opened => it did not exist before, but was created by `write_file` => add it to the `files` list
+        vector_push_back(file_list, c_info_ptr->filename);
+    }
+    else
+        fclose(read_file);
+
+    // Modify the file size of the file that we've just written
+
+    dictionary_set(file_size, c_info_ptr->filename, &size); //NOTE: store address of size_t => (size_t*), make sure to deref. it correctly
+    return 0;
+}
+
+int is_directory(char* path) { // Inspired from: https://stackoverflow.com/questions/3828192/checking-if-a-directory-exists-in-unix-system-call
+    struct stat st; 
+    if (stat(path, &st) == -1) {
+        perror("is_directory stat failed");
+        exit(1);
+    }
+    return S_ISDIR(st.st_mode);
 }
