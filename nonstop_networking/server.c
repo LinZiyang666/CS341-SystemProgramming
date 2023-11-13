@@ -631,10 +631,10 @@ int read_put_from_client(client_info_t *c_info_ptr, int client_fd)
     read_from_socket(client_fd, (char *)&size, sizeof(size_t));
     size_t bytes_read = 0;
 
-    while (bytes_read < size + 5)
+    while (bytes_read < size + 1) // Try to read one more byte, to see if there's too much data sent by the client; if so: `print_too_much_data()` in `is_error()`
     {
 
-        size_t bytes_to_read = get_min(size + 5 - bytes_read, MAX_HEADER_LEN);
+        size_t bytes_to_read = get_min(size + 1 - bytes_read, MAX_HEADER_LEN);
         char buffer[MAX_HEADER_LEN + 1] = {0};
 
         ssize_t bytes_read_from_socket = read_from_socket(client_fd, buffer, bytes_to_read);

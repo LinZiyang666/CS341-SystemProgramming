@@ -212,7 +212,8 @@ int read_server_response(verb req)
     size_t status_bytes_read = read_from_socket(server_fd, response, strlen(OK));  // We will use this variable to read the remaining `strlen(ERROR) - status_bytes_read` bytes in the case of ERROR
 
     if (strcmp(response, OK) == 0) { // Succesful request returned from the server
-        fprintf(stdout, "%s\n", OK); // TODO: check if needed
+
+        fprintf(stderr, "%s\n", OK); // TODO: check if needed -> Not needed, use for debug
 
         if (req == PUT || req == DELETE)
             print_success();
@@ -220,9 +221,9 @@ int read_server_response(verb req)
 
             size_t size = 0;
             read_from_socket(server_fd, (char*)&size, sizeof(size_t)); // read the size that we expect to receive, that we will have to read later on
-            char buffer[size + 6]; 
-            memset(buffer, 0, size + 6);
-            status_bytes_read = read_from_socket(server_fd, buffer, size + 5);
+            char buffer[size + 2];
+            memset(buffer, 0, size + 2);
+            status_bytes_read = read_from_socket(server_fd, buffer, size + 1);
             if (is_error(status_bytes_read, size)) {
                 free(response);
                 return -1;
@@ -242,6 +243,7 @@ int read_server_response(verb req)
             if (!local_file) {
                 perror("fopen() failed in GET OK");
                 free(response);
+                fclose(local_file);
                 return -1; 
             }
 
@@ -249,6 +251,7 @@ int read_server_response(verb req)
             {
                 perror("chmod");
                 free(response);
+                fclose(local_file);
                 return -1;
             }
 
@@ -256,11 +259,9 @@ int read_server_response(verb req)
             size_t size = 0;
             read_from_socket(server_fd, (char *)&size, sizeof(size_t));
             size_t bytes_read = 0;
-            // \r\n\r\n -> 4 bytes
-            // HTTP Web requests:  \r\n forms the standard line terminator in HTTP protocol
 
-            while (bytes_read < size + 5) { // TODO: check -> https://stackoverflow.com/questions/6686261/what-at-the-bare-minimum-is-required-for-an-http-request
-                size_t new_bytes_read = get_min(size + 5 - bytes_read, MAX_HEADER_LEN); 
+            while (bytes_read < size + 1) { // Try to read one more byte, so that if there exists one more byte => too_much_data() printed in `is_error()`
+                size_t new_bytes_read = get_min(size + 1 - bytes_read, MAX_HEADER_LEN); 
                 char buffer[MAX_HEADER_LEN + 1] = {0}; // ChatGPT: , if you're simply initializing a freshly declared array, the direct initializer is more concise and idiomatic C.
                 size_t bytes_read_from_socket = read_from_socket(server_fd, buffer, new_bytes_read); // read from socket
 
@@ -274,6 +275,7 @@ int read_server_response(verb req)
 
             if (is_error(bytes_read, size)) {
                 free(response);
+                fclose(local_file);
                 return -1;
                 }
 
