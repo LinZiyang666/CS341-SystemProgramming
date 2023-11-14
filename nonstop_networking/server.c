@@ -488,7 +488,7 @@ int exec_list(int client_fd) { // read from `dir/filename` and write OK\n[size][
 
      write_to_socket(client_fd, OK, strlen(OK)); // OK\n
      VECTOR_FOR_EACH(file_list, filename, {
-        size += strlen(filename) + 1;
+        size += strlen(filename);
      });
 
      if (size) size --; // Each filename has \n appended to it, if it is not the last file
@@ -496,9 +496,16 @@ int exec_list(int client_fd) { // read from `dir/filename` and write OK\n[size][
      write_to_socket(client_fd, (char*) &size, sizeof(size_t)); //[size]
 
      VECTOR_FOR_EACH(file_list, filename, {
-        write_to_socket(client_fd, filename, strlen(filename));
-        if (_it != _iend - 1) // not the last file in the `file_list` vector =>  Notice there is no new line at the end of the list.
-            write_to_socket(client_fd, "\n", 1);
+         if (_it != _iend - 1) // not the last file in the `file_list` vector =>  Notice there is no new line at the end of the list.
+            write_to_socket(client_fd, filename, strlen(filename));
+        else {
+            char *buff = strdup(filename);
+            buff[strlen(filename) - 1] = '\0';
+            write_to_socket(client_fd, buff, strlen(filename) - 1);
+            free(buff);
+        }
+
+        //     write_to_socket(client_fd, "\n", 1);
      });
 
     return 0;
