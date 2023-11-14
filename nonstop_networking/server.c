@@ -74,7 +74,7 @@ int read_put_from_client(client_info_t *c_info_ptr, int client_fd);
 
 
 // Global variables: naming convention: https://users.ece.cmu.edu/~eno/coding/CCodingStandard.html#gconstants
-static char *g_temp_dir;
+static char *g_temp_dir = NULL;
 static char *g_port = NULL;
 static int g_sock_fd; // socket exposed by the SERVER
 static int g_epoll_fd = -1;
@@ -366,13 +366,13 @@ void read_header(client_info_t *c_info_ptr, int client_fd)
     {
         c_info_ptr->cmd = GET;
         strcpy(c_info_ptr->filename, c_info_ptr->header + strlen("GET\n"));
-        c_info_ptr->header[strlen(c_info_ptr->header) - 1] = '\0';
+        c_info_ptr->filename[strlen(c_info_ptr->filename) - 1] = '\0';
     }
     else if (!strncmp(c_info_ptr->header, "PUT", 3))
     {
         c_info_ptr->cmd = PUT;
         strcpy(c_info_ptr->filename, c_info_ptr->header + strlen("PUT\n"));
-        c_info_ptr->header[strlen(c_info_ptr->header) - 1] = '\0';
+        c_info_ptr->filename[strlen(c_info_ptr->filename) - 1] = '\0';
 
         int err_put = read_put_from_client(c_info_ptr, client_fd);
         if (err_put)
@@ -386,7 +386,7 @@ void read_header(client_info_t *c_info_ptr, int client_fd)
     {
         c_info_ptr->cmd = DELETE;
         strcpy(c_info_ptr->filename, c_info_ptr->header + strlen("DELETE\n"));
-        c_info_ptr->header[strlen(c_info_ptr->header) - 1] = '\0';
+        c_info_ptr->filename[strlen(c_info_ptr->filename) - 1] = '\0';
     }
     else if (!strncmp(c_info_ptr->header, "LIST", 4))
     {
@@ -488,7 +488,7 @@ int exec_list(int client_fd) { // read from `dir/filename` and write OK\n[size][
 
      write_to_socket(client_fd, OK, strlen(OK)); // OK\n
      VECTOR_FOR_EACH(file_list, filename, {
-        size += strlen(filename);
+        size += strlen(filename) + 1;
      });
 
      if (size) size --; // Each filename has \n appended to it, if it is not the last file
@@ -496,16 +496,9 @@ int exec_list(int client_fd) { // read from `dir/filename` and write OK\n[size][
      write_to_socket(client_fd, (char*) &size, sizeof(size_t)); //[size]
 
      VECTOR_FOR_EACH(file_list, filename, {
-         if (_it != _iend - 1) // not the last file in the `file_list` vector =>  Notice there is no new line at the end of the list.
-            write_to_socket(client_fd, filename, strlen(filename));
-        else {
-            char *buff = strdup(filename);
-            buff[strlen(filename) - 1] = '\0';
-            write_to_socket(client_fd, buff, strlen(filename) - 1);
-            free(buff);
-        }
-
-        //     write_to_socket(client_fd, "\n", 1);
+        write_to_socket(client_fd, filename, strlen(filename));
+        if (_it != _iend - 1) // not the last file in the `file_list` vector =>  Notice there is no new line at the end of the list.
+            write_to_socket(client_fd, "\n", 1);
      });
 
     return 0;
@@ -626,6 +619,7 @@ int read_put_from_client(client_info_t *c_info_ptr, int client_fd)
 
     // we will check if read_file == NULL, and if so: file could not be opened => it did not exist before, but was created by `write_file` => add it to the `files` list
     FILE *read_file = fopen(filepath, "r");
+
     FILE *write_file = fopen(filepath, "w"); // If a PUT request is called with an existing file. overwrite the file
 
     if (write_file == NULL)
