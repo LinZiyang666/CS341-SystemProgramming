@@ -545,8 +545,6 @@ int exec_delete(client_info_t *c_info_ptr, int client_fd) { // read `dir/filenam
 // b.) When process receives SIGINT
 void close_server() {  
 
-    free(g_temp_dir);
-
     if (g_epoll_fd != -1)
         close(g_epoll_fd);
     
@@ -567,6 +565,8 @@ void close_server() {
     if (rmdir(g_temp_dir) == -1) { // dir may not be empty
         rm_unempty_dir(g_temp_dir); // clean up any files stored in this directory, and then delete the directory itself.
     }
+
+    free(g_temp_dir);
 
     dictionary_destroy(file_size);
     exit(1);
