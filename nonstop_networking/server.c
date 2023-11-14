@@ -144,7 +144,7 @@ void setup_dir()
 {
     LOG("Setting up directory");
     char template[7] = "XXXXXX"; // template  must  not be a string constant, but should be delared as a character array.
-    g_temp_dir = mkdtemp(template);
+    g_temp_dir = strdup(mkdtemp(template));
     print_temp_directory(g_temp_dir);
 }
 void setup_global_variables(char *port)
@@ -545,6 +545,8 @@ int exec_delete(client_info_t *c_info_ptr, int client_fd) { // read `dir/filenam
 // b.) When process receives SIGINT
 void close_server() {  
 
+    free(g_temp_dir);
+
     if (g_epoll_fd != -1)
         close(g_epoll_fd);
     
@@ -619,7 +621,6 @@ int read_put_from_client(client_info_t *c_info_ptr, int client_fd)
 
     // we will check if read_file == NULL, and if so: file could not be opened => it did not exist before, but was created by `write_file` => add it to the `files` list
     FILE *read_file = fopen(filepath, "r");
-
     FILE *write_file = fopen(filepath, "w"); // If a PUT request is called with an existing file. overwrite the file
 
     if (write_file == NULL)
