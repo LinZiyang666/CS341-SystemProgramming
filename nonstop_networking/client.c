@@ -50,10 +50,6 @@ int main(int argc, char **argv)
     parsed_args = parse_args(argc, argv);
     // check args
     verb req = check_args(parsed_args);
-    if (req == V_UNKNOWN)
-    {
-        exit(1);
-    }
 
     char *host = parsed_args[0];
     char *port = parsed_args[1];
@@ -292,7 +288,7 @@ int read_server_response(verb req)
         read_from_socket(server_fd, err_response + status_bytes_read, strlen(ERROR) - status_bytes_read);
         // fprintf(stderr, "After %s\n", err_response);
         if (strcmp(err_response, ERROR) == 0) {
-            fprintf(stdout, "%s\n", ERROR); // TODO: check if needed
+            fprintf(stderr, "%s\n", ERROR); // TODO: check if needed
             char error_msg[MAX_ERROR_LEN + 1] = {0};
             int read_error = read_from_socket(server_fd, error_msg, MAX_ERROR_LEN);
             if (0 == read_error) {   

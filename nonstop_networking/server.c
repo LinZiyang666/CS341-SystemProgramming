@@ -335,6 +335,11 @@ void handle_errors(client_info_t *c_info_ptr, int client_fd)
         // fprintf(stderr, "Error: %s\n", err_bad_request);
         write_to_socket(client_fd, ERROR, strlen(ERROR));
         write_to_socket(client_fd, err_bad_request, strlen(err_bad_request));
+
+        /*
+        ERROR\n
+        Bad request
+        */
     }
     else if (c_info_ptr->state == -2)
     {
