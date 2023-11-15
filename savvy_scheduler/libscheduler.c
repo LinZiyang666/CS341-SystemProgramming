@@ -37,6 +37,8 @@ typedef struct _job_info
     double remaining_time; // for psrtf
     double next_time;      // for RR = arrival time in ready queue
 
+    double start_after_preempt;
+
 } job_info;
 
 bool is_preemptive(scheme_t scheme)
@@ -97,6 +99,8 @@ int comparer_fcfs(const void *a, const void *b)
         return -1;
     else if (j1_info->arrival_time > j2_info->arrival_time)
         return 1;
+    else
+        return 0;
 }
 
 int comparer_ppri(const void *a, const void *b)
@@ -194,40 +198,44 @@ void scheduler_new_job(job *newjob, int job_number, double time,
     my_job->start_time = -1; // Job has not started yet
     my_job->next_time = -1;  // Job has not yet been added to the ready (priority) queue
 
+    my_job->start_after_preempt = time; // The tme at which `my_job` will start again, after preempt; used by PSRTF to calculate `remaining time` of each job
+
     newjob->metadata = my_job;       // The only field you will be using or modifying is metadata, where you must insert your job_info struct
     priqueue_offer(&pqueue, newjob); // Once you’ve set up newjob offer it to the queue.
 }
 
 job *scheduler_quantum_expired(job *job_evicted, double time)
 {
+    job *j = priqueue_peek(&pqueue);
+    job_info *j_info = j->metadata;
+    if (j_info->start_time == -1) // Intialise actual start time of a job
+        j_info->start_time = time;
 
     if (!job_evicted) // No jobs are running
     {
         // Schedule the first in the queue
         job *next_job = priqueue_peek(&pqueue);
         job_info *next_job_info = (job_info *)next_job->metadata;
-        if (next_job_info->start_time == -1)
-            next_job_info->start_time = time;
+        next_job_info->start_after_preempt = time;
         return next_job;
     }
     else
     {
 
-        // Mark that the `job_evicted` was added to the ready queue again at time `next_time` &
+        // Mark that the `job_evicted` was added to the ready queue again at time `next_time`
         job_info *j_ev_info = (job_info *)job_evicted->metadata;
         j_ev_info->next_time = time;
-        j_ev_info->remaining_time = time - j_ev_info->start_time; // time remaining, that will be done next time when `job_evicted` is polled from the queue
 
         if (is_preemptive(pqueue_scheme))
         {
-            // place it back on the queue and return a pointer to the next job that should run. (Note, it is possible for the next job to be the same as job_evicted
+            // place it back on the queue an (Note, it is possible for the next job to be the same as job_evicted
             job *next_job = priqueue_poll(&pqueue);
             job_info *next_job_info = (job_info *)next_job->metadata;
-            if (next_job_info->start_time == -1)
-                next_job_info->start_time = time;
+            next_job_info->start_after_preempt = time;
+            priqueue_offer(&pqueue, next_job);
 
-            priqueue_offer(&pqueue, job_evicted);
-            return next_job;
+            j_ev_info->remaining_time -= time - j_ev_info->start_after_preempt;
+            return priqueue_peek(&pqueue); // ret. a pointer to the next job that should run
         }
         else
         {
