@@ -35,9 +35,13 @@ typedef struct _job_info {
     double start_time; 
     double arrival_time; // for fcfs
     double remaining_time; // for psrtf
-    
+    double next_time; // for RR = arrival time in ready queue
 
 } job_info;
+
+bool is_preemptive(scheme_t scheme) { // NOTE: RoundRobin is also pre-emptive, even though its name does not state that
+    return scheme == PPRI || scheme == PSRTF || scheme == RR;
+}
 
 void scheduler_start_up(scheme_t s) {
     switch (s) {
@@ -75,34 +79,78 @@ static int break_tie(const void *a, const void *b) {
     return comparer_fcfs(a, b);
 }
 
-int comparer_fcfs(const void *a, const void *b) {
-    // TODO: Implement me!
-    return 0;
+int comparer_fcfs(const void *a, const void *b) { // Priority: Arrival increasing
+    // Implement me!
+
+    job* j1 = (job*)a;
+    job* j2 = (job*)b;
+
+    job_info* j1_info = (job_info*) j1->metadata;
+    job_info* j2_info = (job_info*) j2->metadata;
+
+    if (j1_info->arrival_time < j2_info->arrival_time) return -1;
+    else if (j1_info->arrival_time > j2_info->arrival_time) return 1;
 }
 
-int comparer_ppri(const void *a, const void *b) {
+int comparer_ppri(const void *a, const void *b) { 
     // Complete as is
     return comparer_pri(a, b);
 }
 
-int comparer_pri(const void *a, const void *b) {
-    // TODO: Implement me!
-    return 0;
+int comparer_pri(const void *a, const void *b) { // Priority: priority increasing, if equal: break_tie()
+    //  For the priority comparers, lower priority runs first
+
+    // Implement me!
+    job* j1 = (job*)a;
+    job* j2 = (job*)b;
+
+    job_info* j1_info = (job_info*) j1->metadata;
+    job_info* j2_info = (job_info*) j2->metadata;
+
+    if (j1_info->priority < j2_info->priority) return -1;
+    else if (j1_info->priority > j2_info->priority) return 1;
+    else return break_tie(a, b); //FCFS
 }
 
-int comparer_psrtf(const void *a, const void *b) {
-    // TODO: Implement me!
-    return 0;
+int comparer_psrtf(const void *a, const void *b) { // Priority: Remaining increasing, if equal: break_tie()
+    // Implement me!
+    
+    job* j1 = (job*)a;
+    job* j2 = (job*)b;
+
+    job_info* j1_info = (job_info*) j1->metadata;
+    job_info* j2_info = (job_info*) j2->metadata;
+
+    if (j1_info->remaining_time < j2_info->remaining_time) return -1;
+    else if (j1_info->remaining_time > j2_info->remaining_time) return 1;
+    else return break_tie(a, b); //FCFS
 }
 
-int comparer_rr(const void *a, const void *b) {
-    // TODO: Implement me!
-    return 0;
+int comparer_rr(const void *a, const void *b) { // Priority: arriving time IN QUEUE (not to the scheduler) increasing 
+    // Implement me!
+
+    job* j1 = (job*)a;
+    job* j2 = (job*)b;
+
+    job_info* j1_info = (job_info*) j1->metadata;
+    job_info* j2_info = (job_info*) j2->metadata;
+
+    if (j1_info->next_time < j2_info->next_time) return -1;
+    else if (j1_info->next_time > j2_info->next_time) return 1;
+    else return break_tie(a, b); //FCFS
 }
 
-int comparer_sjf(const void *a, const void *b) {
-    // TODO: Implement me!
-    return 0;
+int comparer_sjf(const void *a, const void *b) { // Priority: running_time (total CPU time) increasing
+    // Implement me!
+    job* j1 = (job*)a;
+    job* j2 = (job*)b;
+
+    job_info* j1_info = (job_info*) j1->metadata;
+    job_info* j2_info = (job_info*) j2->metadata;
+
+    if (j1_info->running_time < j2_info->running_time) return -1;
+    else if (j1_info->running_time > j2_info->running_time) return 1;
+    else return break_tie(a, b);
 }
 
 // Do not allocate stack space or initialize ctx. These will be overwritten by
@@ -119,6 +167,7 @@ void scheduler_new_job(job *newjob, int job_number, double time,
     my_job->remaining_time = sched_data->running_time; // Initially: remaining = running
     my_job->arrival_time = time;
     my_job->start_time = -1; // Job has not started yet
+    my_job->next_time = -1; // Job has not yet been added to the ready (priority) queue
 
 
     newjob->metadata = my_job; // The only field you will be using or modifying is metadata, where you must insert your job_info struct
