@@ -207,9 +207,14 @@ void scheduler_new_job(job *newjob, int job_number, double time,
 job *scheduler_quantum_expired(job *job_evicted, double time)
 {
     job *j = priqueue_peek(&pqueue);
+
+    if (!j && !job_evicted) return NULL;
+
+    if (j) {
     job_info *j_info = j->metadata;
     if (j_info->start_time == -1) // Intialise actual start time of a job
         j_info->start_time = time;
+    }
 
     if (!job_evicted) // No jobs are running
     {
@@ -221,7 +226,6 @@ job *scheduler_quantum_expired(job *job_evicted, double time)
     }
     else
     {
-
         // Mark that the `job_evicted` was added to the ready queue again at time `next_time`
         job_info *j_ev_info = (job_info *)job_evicted->metadata;
         j_ev_info->next_time = time;
