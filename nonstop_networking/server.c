@@ -357,6 +357,13 @@ void handle_errors(client_info_t *c_info_ptr, int client_fd)
     clean_client(client_fd);
 }
 
+// RET: 1, if succesful, 0 otherwise
+bool read_after_newline(int client_fd) {
+        char test[2];
+        size_t try_one_more = read_header_from_socket(client_fd, test, 1);
+        return (try_one_more != 0);
+}
+
 void read_header(client_info_t *c_info_ptr, int client_fd)
 {
     size_t bytes_read = read_header_from_socket(client_fd, c_info_ptr->header, MAX_HEADER_LEN); // GET \n
@@ -373,9 +380,7 @@ void read_header(client_info_t *c_info_ptr, int client_fd)
         strcpy(c_info_ptr->filename, c_info_ptr->header + strlen("GET ")); // filename = '\n'
         c_info_ptr->filename[strlen(c_info_ptr->filename) - 1] = '\0'; // '\0'
 
-        char test[2];
-        size_t try_one_more = read_header_from_socket(client_fd, test, 1);
-        if (try_one_more != 0) {
+        if (read_after_newline(client_fd)) {
             c_info_ptr->state = -1;    
             epoll_set_client_WR(client_fd);
             return;
@@ -401,9 +406,7 @@ void read_header(client_info_t *c_info_ptr, int client_fd)
         strcpy(c_info_ptr->filename, c_info_ptr->header + strlen("DELETE "));
         c_info_ptr->filename[strlen(c_info_ptr->filename) - 1] = '\0';
 
-        char test[2];
-        size_t try_one_more = read_header_from_socket(client_fd, test, 1);
-        if (try_one_more != 0) {
+        if (read_after_newline(client_fd)) {
             c_info_ptr->state = -1;    
             epoll_set_client_WR(client_fd);
             return;
@@ -413,9 +416,8 @@ void read_header(client_info_t *c_info_ptr, int client_fd)
     {
         // Notice there is no new line at the end of the list.
         c_info_ptr->cmd = LIST;
-        char test[2];
-        size_t try_one_more = read_header_from_socket(client_fd, test, 1);
-        if (try_one_more != 0) {
+
+        if (read_after_newline(client_fd)) {
             c_info_ptr->state = -1;    
             epoll_set_client_WR(client_fd);
             return;
