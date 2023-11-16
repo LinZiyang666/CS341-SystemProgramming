@@ -359,7 +359,7 @@ void handle_errors(client_info_t *c_info_ptr, int client_fd)
 
 void read_header(client_info_t *c_info_ptr, int client_fd)
 {
-    size_t bytes_read = read_header_from_socket(client_fd, c_info_ptr->header, MAX_HEADER_LEN);
+    size_t bytes_read = read_header_from_socket(client_fd, c_info_ptr->header, MAX_HEADER_LEN); // GET \n
     if (bytes_read == 1024) // The maximum header length (header is part before data) for both the request and response is 1024 bytes => Bad request (malformed)
     {
         c_info_ptr->state = -1;         // mark the error
@@ -370,13 +370,21 @@ void read_header(client_info_t *c_info_ptr, int client_fd)
     if (!strncmp(c_info_ptr->header, "GET ", 4))
     {
         c_info_ptr->cmd = GET;
-        strcpy(c_info_ptr->filename, c_info_ptr->header + strlen("GET\n"));
-        c_info_ptr->filename[strlen(c_info_ptr->filename) - 1] = '\0';
+        strcpy(c_info_ptr->filename, c_info_ptr->header + strlen("GET ")); // filename = '\n'
+        c_info_ptr->filename[strlen(c_info_ptr->filename) - 1] = '\0'; // '\0'
+
+        char test[2];
+        size_t try_one_more = read_header_from_socket(client_fd, test, 1);
+        if (try_one_more != 0) {
+            c_info_ptr->state = -1;    
+            epoll_set_client_WR(client_fd);
+            return;
+        }
     }
     else if (!strncmp(c_info_ptr->header, "PUT ", 4))
     {
         c_info_ptr->cmd = PUT;
-        strcpy(c_info_ptr->filename, c_info_ptr->header + strlen("PUT\n"));
+        strcpy(c_info_ptr->filename, c_info_ptr->header + strlen("PUT "));
         c_info_ptr->filename[strlen(c_info_ptr->filename) - 1] = '\0';
 
         int err_put = read_put_from_client(c_info_ptr, client_fd);
@@ -390,13 +398,28 @@ void read_header(client_info_t *c_info_ptr, int client_fd)
     else if (!strncmp(c_info_ptr->header, "DELETE ", 7))
     {
         c_info_ptr->cmd = DELETE;
-        strcpy(c_info_ptr->filename, c_info_ptr->header + strlen("DELETE\n"));
+        strcpy(c_info_ptr->filename, c_info_ptr->header + strlen("DELETE "));
         c_info_ptr->filename[strlen(c_info_ptr->filename) - 1] = '\0';
+
+        char test[2];
+        size_t try_one_more = read_header_from_socket(client_fd, test, 1);
+        if (try_one_more != 0) {
+            c_info_ptr->state = -1;    
+            epoll_set_client_WR(client_fd);
+            return;
+        }
     }
     else if (!strcmp(c_info_ptr->header, "LIST\n"))
     {
         // Notice there is no new line at the end of the list.
         c_info_ptr->cmd = LIST;
+        char test[2];
+        size_t try_one_more = read_header_from_socket(client_fd, test, 1);
+        if (try_one_more != 0) {
+            c_info_ptr->state = -1;    
+            epoll_set_client_WR(client_fd);
+            return;
+        }
     }
     else
     { // Nonexistent verb => Bad request
@@ -463,7 +486,12 @@ int exec_get(client_info_t *c_info_ptr, int client_fd) { // read from `dir/filen
         return 1;
      }
 
-     write_to_socket(client_fd, OK, strlen(OK)); // OK\n
+     write_to_socket(client_fd, OK, strlen(OK)); 
+    if (strlen(c_info_ptr->filename) == 0) // GET \n
+        {
+           c_info_ptr->state = -1; 
+           return 1;
+        }
      size_t size = *(size_t*)dictionary_get(file_size, c_info_ptr->filename);
      write_to_socket(client_fd, (char*) &size, sizeof(size_t)); //[size]
 

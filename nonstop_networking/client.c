@@ -146,6 +146,13 @@ int run_client_request(verb req)
         if (-1 == put_err)
             return -1;
     }
+    
+    // Once the client has sent all the data to the server, it should perform a ‘half close’ by closing the write half of the socket (hint: shutdown()).
+    int shutdown_err = shutdown(server_fd, SHUT_WR);
+    if (-1 == shutdown_err) {
+        perror("Failed to shutdown() Write part");
+        return -1;
+    }
     return 0;
 }
 
@@ -191,12 +198,7 @@ int perform_put()
     }
 
     fclose(local_file);
-    // Once the client has sent all the data to the server, it should perform a ‘half close’ by closing the write half of the socket (hint: shutdown()).
-    int shutdown_err = shutdown(server_fd, SHUT_WR);
-    if (-1 == shutdown_err) {
-        perror("Failed to shutdown() Write part");
-        return -1;
-    }
+    
 
     return 0;
 }
