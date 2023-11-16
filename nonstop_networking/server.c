@@ -367,13 +367,13 @@ void read_header(client_info_t *c_info_ptr, int client_fd)
         return;
     }
 
-    if (!strncmp(c_info_ptr->header, "GET", 3))
+    if (!strncmp(c_info_ptr->header, "GET ", 4))
     {
         c_info_ptr->cmd = GET;
         strcpy(c_info_ptr->filename, c_info_ptr->header + strlen("GET\n"));
         c_info_ptr->filename[strlen(c_info_ptr->filename) - 1] = '\0';
     }
-    else if (!strncmp(c_info_ptr->header, "PUT", 3))
+    else if (!strncmp(c_info_ptr->header, "PUT ", 4))
     {
         c_info_ptr->cmd = PUT;
         strcpy(c_info_ptr->filename, c_info_ptr->header + strlen("PUT\n"));
@@ -387,13 +387,13 @@ void read_header(client_info_t *c_info_ptr, int client_fd)
             return;
         }
     }
-    else if (!strncmp(c_info_ptr->header, "DELETE", 6))
+    else if (!strncmp(c_info_ptr->header, "DELETE ", 7))
     {
         c_info_ptr->cmd = DELETE;
         strcpy(c_info_ptr->filename, c_info_ptr->header + strlen("DELETE\n"));
         c_info_ptr->filename[strlen(c_info_ptr->filename) - 1] = '\0';
     }
-    else if (!strncmp(c_info_ptr->header, "LIST", 4))
+    else if (!strcmp(c_info_ptr->header, "LIST\n"))
     {
         // Notice there is no new line at the end of the list.
         c_info_ptr->cmd = LIST;
