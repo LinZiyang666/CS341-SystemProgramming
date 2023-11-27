@@ -604,7 +604,7 @@ void close_server() {
     free(g_temp_dir);
 
     dictionary_destroy(file_size);
-    exit(1);
+    _exit(1);
 }
 
 // Simplified version of: https://stackoverflow.com/questions/2256945/removing-a-non-empty-directory-programmatically-in-c-or-c
